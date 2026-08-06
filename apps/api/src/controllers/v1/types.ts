@@ -1213,6 +1213,7 @@ export type CrawlStatusResponse =
       success: true;
       status: "scraping" | "completed" | "failed" | "cancelled";
       completed: number;
+      failed?: number;
       total: number;
       creditsUsed: number;
       expiresAt: string;
@@ -1224,6 +1225,7 @@ export type CrawlStatusResponse =
       status: "failed";
       error: string;
       completed: number;
+      failed?: number;
       total: number;
       creditsUsed: number;
       expiresAt: string;

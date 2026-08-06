@@ -16,7 +16,7 @@ import {
 import { ScrapeJobTimeoutError } from "../../lib/error";
 import { ScrapeOptions } from "../../controllers/v2/types";
 import { filterLinks, filterUrl } from "@mendable/firecrawl-rs";
-import { extractBaseDomain } from "../../lib/url-utils";
+import { extractBaseDomain, parseHostname } from "../../lib/url-utils";
 
 export const SITEMAP_LIMIT = 25;
 const SITEMAP_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
@@ -44,6 +44,32 @@ enum DenialReason {
 interface FilterLinksResult {
   links: string[];
   denialReasons: Map<string, string>;
+}
+
+/**
+ * A bare public hostname or email address in a PDF/document annotation is not a
+ * valid relative web path. Resolving it against the current page turns values
+ * such as `assets.example.com` into `/path/assets.example.com`, causing bogus
+ * same-origin crawl jobs. Real relative files such as `report.pdf` remain
+ * allowed because their suffix is not an ICANN/private public suffix.
+ */
+export function isBareExternalReference(href: string): boolean {
+  const value = String(href ?? "").trim();
+  if (!value || /^(?:[a-z][a-z0-9+.-]*:|\/\/|[./?#])/i.test(value)) {
+    return false;
+  }
+
+  const firstSegment = value.split(/[/?#]/, 1)[0];
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(firstSegment)) return true;
+
+  const hostname = firstSegment.replace(/:\d+$/, "").toLowerCase();
+  if (!hostname.includes(".")) return false;
+  const parsed = parseHostname(hostname);
+  return Boolean(
+    parsed.hostname === hostname &&
+      parsed.domain &&
+      (parsed.isIcann || parsed.isPrivate),
+  );
 }
 
 export class WebCrawler {
@@ -666,6 +692,12 @@ export class WebCrawler {
   }
 
   public async filterURL(href: string, url: string): Promise<FilterResult> {
+    if (isBareExternalReference(href)) {
+      return {
+        allowed: false,
+        denialReason: DenialReason.URL_PARSE_ERROR,
+      };
+    }
     return await filterUrl({
       href: href,
       url: url,

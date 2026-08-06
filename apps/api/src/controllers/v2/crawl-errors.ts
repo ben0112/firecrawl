@@ -17,6 +17,9 @@ import { TransportableError } from "../../lib/error";
 import { scrapeQueue } from "../../services/worker/nuq-router";
 configDotenv();
 
+const UNRECORDED_FAILURE =
+  'SCRAPE_TIMEOUT|{"message":"The scrape job failed without recording a reason. The worker may have stalled or been interrupted."}';
+
 export async function crawlErrorsController(
   req: RequestWithAuth<CrawlStatusParams, undefined, CrawlErrorsResponse>,
   res: Response<CrawlErrorsResponse>,
@@ -33,13 +36,11 @@ export async function crawlErrorsController(
       zeroDataRetention: sc.zeroDataRetention ?? false,
     });
 
-    const failedJobs = (
-      await scrapeQueue.getJobsWithStatus(
-        await getCrawlJobs(req.params.jobId),
-        "failed",
-        logger,
-      )
-    ).filter(x => x.failedReason);
+    const failedJobs = await scrapeQueue.getJobsWithStatus(
+      await getCrawlJobs(req.params.jobId),
+      "failed",
+      logger,
+    );
 
     res.status(200).json({
       errors: failedJobs
@@ -47,8 +48,9 @@ export async function crawlErrorsController(
           if (x.data.mode !== "single_urls") {
             return null;
           }
+          const failedReason = x.failedReason ?? UNRECORDED_FAILURE;
           const error = deserializeTransportableError(
-            x.failedReason!,
+            failedReason,
           ) as TransportableError | null;
           if (error?.code === "SCRAPE_RACED_REDIRECT_ERROR") {
             return null;
@@ -66,7 +68,7 @@ export async function crawlErrorsController(
                   error: error.message,
                 }
               : {
-                  error: x.failedReason!,
+                  error: failedReason,
                 }),
           };
         })

@@ -754,6 +754,7 @@ export interface CrawlJob {
   status: "scraping" | "completed" | "failed" | "cancelled";
   total: number;
   completed: number;
+  failed?: number;
   creditsUsed?: number;
   expiresAt?: string;
   next?: string | null;
@@ -782,6 +783,7 @@ export interface BatchScrapeJob {
   id: string;
   status: "scraping" | "completed" | "failed" | "cancelled";
   completed: number;
+  failed?: number;
   total: number;
   creditsUsed?: number;
   expiresAt?: string;

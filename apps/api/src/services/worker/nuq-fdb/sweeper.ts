@@ -47,7 +47,8 @@ import { NuqFdbExternalSlots } from "./slots";
 
 const SWEEP_LOCK_TTL_MS = 15_000;
 const SWEEP_BATCH = 50;
-const STALL_FAILED_REASON = "Job stalled too many times";
+const STALL_FAILED_REASON =
+  'SCRAPE_TIMEOUT|{"message":"NuQ job stalled after 10 lock lease expirations and was stopped to avoid endless retries."}';
 
 type SweepLagStats = {
   dueCount: number;

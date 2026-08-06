@@ -33,6 +33,10 @@ import {
 import { ScrapeJobSingleUrls } from "../../types";
 import { redisEvictConnection } from "../../../src/services/redis";
 import { isBaseDomain, extractBaseDomain } from "../../lib/url-utils";
+import {
+  getCrawlProgress,
+  hasMoreCrawlResultPages,
+} from "../../lib/crawl-progress";
 configDotenv();
 
 export type PseudoJob<T> = {
@@ -216,6 +220,7 @@ export async function crawlStatusController(
     req.params.jobId,
     logger.child({ zeroDataRetention }),
   );
+  const progress = getCrawlProgress(numericStats);
 
   const creditsBilled = config.USE_DB_AUTHENTICATION
     ? await creditsBilledByCrawlId(req.params.jobId).catch(() => null)
@@ -227,6 +232,7 @@ export async function crawlStatusController(
   let outputBulkA: {
     status?: "completed" | "scraping" | "cancelled" | "failed";
     completed?: number;
+    failed?: number;
     total?: number;
     creditsUsed?: number;
   } = {
@@ -235,12 +241,9 @@ export async function crawlStatusController(
       : group.status === "active"
         ? "scraping"
         : group.status,
-    completed: numericStats.completed ?? 0,
-    total:
-      (numericStats.completed ?? 0) +
-      (numericStats.active ?? 0) +
-      (numericStats.queued ?? 0) +
-      (numericStats.backlog ?? 0),
+    completed: progress.completed,
+    failed: progress.failed,
+    total: progress.total,
     creditsUsed: creditsBilled?.[0]?.credits_billed ?? -1,
   };
 
@@ -261,6 +264,7 @@ export async function crawlStatusController(
       error: crawlError,
       status: "failed",
       completed: 0,
+      failed: 0,
       total: 0,
       creditsUsed: outputBulkA.creditsUsed ?? 0,
       expiresAt: (await getCrawlExpiry(req.params.jobId)).toISOString(),
@@ -323,11 +327,14 @@ export async function crawlStatusController(
 
   outputBulkB = {
     data: scrapes,
-    next:
-      (outputBulkA.total ?? 0) > start + iteratedOver ||
-      outputBulkA.status !== "completed"
-        ? `${req.protocol}://${req.host}/v2/${isBatch ? "batch/scrape" : "crawl"}/${req.params.jobId}?skip=${start + iteratedOver}${req.query.limit ? `&limit=${req.query.limit}` : ""}`
-        : undefined,
+    next: hasMoreCrawlResultPages({
+      completed: outputBulkA.completed ?? 0,
+      start,
+      iteratedOver,
+      status: outputBulkA.status ?? "scraping",
+    })
+      ? `${req.protocol}://${req.host}/v2/${isBatch ? "batch/scrape" : "crawl"}/${req.params.jobId}?skip=${start + iteratedOver}${req.query.limit ? `&limit=${req.query.limit}` : ""}`
+      : undefined,
   };
 
   // Check for robots.txt blocked URLs and add warning if found
@@ -389,6 +396,7 @@ export async function crawlStatusController(
     success: true,
     status,
     completed: outputBulkA.completed ?? 0,
+    failed: outputBulkA.failed ?? 0,
     total: outputBulkA.total ?? 0,
     creditsUsed: outputBulkA.creditsUsed ?? 0,
     expiresAt: (await getCrawlExpiry(req.params.jobId)).toISOString(),

@@ -1,6 +1,6 @@
 import type { Mocked, MockedFunction } from "vitest";
 // crawler.test.ts
-import { WebCrawler } from "../crawler";
+import { isBareExternalReference, WebCrawler } from "../crawler";
 import axios from "axios";
 import robotsParser from "robots-parser";
 
@@ -10,9 +10,7 @@ vi.mock("robots-parser");
 describe("WebCrawler", () => {
   let crawler: WebCrawler;
   const mockAxios = axios as Mocked<typeof axios>;
-  const mockRobotsParser = robotsParser as MockedFunction<
-    typeof robotsParser
-  >;
+  const mockRobotsParser = robotsParser as MockedFunction<typeof robotsParser>;
 
   let maxCrawledDepth: number;
 
@@ -35,6 +33,36 @@ describe("WebCrawler", () => {
       getSitemaps: vi.fn().mockReturnValue([]),
       getPreferredHost: vi.fn().mockReturnValue("example.com"),
     });
+  });
+
+  it("rejects bare external hostnames and email addresses without breaking relative files", () => {
+    expect(isBareExternalReference("assets.kpmg.com")).toBe(true);
+    expect(isBareExternalReference("www.example.com/report")).toBe(true);
+    expect(isBareExternalReference("person@example.com")).toBe(true);
+    expect(isBareExternalReference("tenant.github.io/docs")).toBe(true);
+
+    expect(isBareExternalReference("https://example.com/report")).toBe(false);
+    expect(isBareExternalReference("//example.com/report")).toBe(false);
+    expect(isBareExternalReference("/reports/report.pdf")).toBe(false);
+    expect(isBareExternalReference("report.pdf")).toBe(false);
+    expect(isBareExternalReference("article.html")).toBe(false);
+    expect(isBareExternalReference("folder/page")).toBe(false);
+  });
+
+  it("does not resolve bare document references into bogus same-origin URLs", async () => {
+    crawler = new WebCrawler({
+      jobId: "TEST",
+      initialUrl: "https://example.com/reports/index/",
+      includes: [],
+      excludes: [],
+    });
+
+    const links = await crawler["extractLinksFromHTML"](
+      '<a href="assets.kpmg.com">KPMG</a><a href="person@example.com">mail</a>',
+      "https://example.com/reports/index/source.pdf",
+    );
+
+    expect(links).toEqual([]);
   });
 
   it("should respect the limit parameter by not returning more links than specified", async () => {
