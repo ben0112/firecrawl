@@ -74,4 +74,37 @@ describeIf("NuQ Postgres queue", () => {
       }),
     ).resolves.toBeNull();
   });
+
+  test("job completion stores nested JSON containing null bytes", async () => {
+    const id = randomUUID();
+    const lock = randomUUID();
+    ids.push(id);
+
+    await scrapeQueue.addJob(id, scrapeData(), {});
+    await cleanupPool.query(
+      "UPDATE nuq.queue_scrape SET status = 'active'::nuq.job_status, lock = $2, locked_at = now() WHERE id = $1",
+      [id, lock],
+    );
+
+    await expect(
+      scrapeQueue.jobFinish(id, lock, {
+        markdown: "before\u0000after",
+        nested: ["\u0000first", { "nul\u0000key": "last\u0000" }],
+        escaped: String.raw`literal\u0000text`,
+      }),
+    ).resolves.toBe(true);
+
+    const result = await cleanupPool.query(
+      "SELECT status, returnvalue FROM nuq.queue_scrape WHERE id = $1",
+      [id],
+    );
+    expect(result.rows[0]).toEqual({
+      status: "completed",
+      returnvalue: {
+        markdown: "beforeafter",
+        nested: ["first", { nulkey: "last" }],
+        escaped: String.raw`literal\u0000text`,
+      },
+    });
+  });
 });
