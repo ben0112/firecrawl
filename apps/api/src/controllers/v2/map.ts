@@ -301,6 +301,7 @@ export async function mapController(
     success: true as const,
     id: result.job_id,
     links: result.mapResults,
+    discovery: result.discovery,
     ...(warning && { warning }),
   };
 

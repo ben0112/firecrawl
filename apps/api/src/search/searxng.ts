@@ -11,6 +11,8 @@ interface SearchOptions {
   location?: string;
   num_results: number;
   page?: number;
+  timeout?: number;
+  signal?: AbortSignal;
 }
 
 export async function searxng_search(
@@ -43,6 +45,8 @@ export async function searxng_search(
         "Content-Type": "application/json",
       },
       params: params,
+      timeout: options.timeout,
+      signal: options.signal,
     });
 
     const data = response.data;

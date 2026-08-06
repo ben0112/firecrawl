@@ -23,15 +23,141 @@ import {
 } from "../services/index";
 import { performCosineSimilarityV2 } from "./map-cosine";
 import { Logger } from "winston";
+import { config } from "../config";
+import { searxng_search } from "../search/searxng";
+import { scrapeURL } from "../scraper/scrapeURL";
+import { CostTracking } from "./cost-tracking";
+import { logger as _logger } from "./logger";
 
 // Max Links that "Smart /map" can return
 const MAX_FIRE_ENGINE_RESULTS = 100;
+const MIN_STANDARD_RESULTS_BEFORE_FALLBACK = 10;
+const MAX_SEARXNG_FALLBACK_RESULTS = 20;
+
+export interface MapDiscoveryMetadata {
+  fallbackAttempted: boolean;
+  fallbackUsed: boolean;
+  sources: {
+    index: number;
+    fireEngine: number;
+    sitemap: number;
+    homepage: number;
+    searxng: number;
+  };
+}
 
 export interface MapResult {
   success: boolean;
   job_id: string;
   time_taken: number;
   mapResults: MapDocument[];
+  discovery: MapDiscoveryMetadata;
+}
+
+export function shouldUseMapFallback(
+  standardResultCount: number,
+  limit: number,
+): boolean {
+  return (
+    standardResultCount < limit &&
+    standardResultCount < Math.min(limit, MIN_STANDARD_RESULTS_BEFORE_FALLBACK)
+  );
+}
+
+async function discoverHomepageLinks({
+  id,
+  url,
+  teamId,
+  orgId,
+  flags,
+  zeroDataRetention,
+  crawlerOptions,
+  location,
+  headers,
+  ignoreCache,
+  abort,
+}: {
+  id: string;
+  url: string;
+  teamId: string;
+  orgId?: string | null;
+  flags: TeamFlags | null;
+  zeroDataRetention: boolean;
+  crawlerOptions: any;
+  location?: ScrapeOptions["location"];
+  headers?: Record<string, string>;
+  ignoreCache: boolean;
+  abort: AbortSignal;
+}): Promise<MapDocument[]> {
+  const timeout = Math.max(
+    1000,
+    Math.min(crawlerOptions.timeout ?? 15000, 30000),
+  );
+  const response = await scrapeURL(
+    `map-homepage;${id}`,
+    url,
+    scrapeOptions.parse({
+      formats: ["links"],
+      onlyMainContent: false,
+      timeout,
+      useMock: crawlerOptions.useMock,
+      ...(ignoreCache ? { maxAge: 0 } : {}),
+      ...(location ? { location } : {}),
+      ...(headers ? { headers } : {}),
+    }),
+    {
+      teamId,
+      orgId: orgId ?? null,
+      teamFlags: flags ?? undefined,
+      zeroDataRetention,
+      externalAbort: {
+        signal: abort,
+        tier: "external",
+        throwable() {
+          return new Error("Map homepage fallback aborted");
+        },
+      },
+    },
+    new CostTracking(),
+  );
+
+  if (!response.success) {
+    throw response.error;
+  }
+
+  const links = response.document.links ?? [];
+  const resolvedHomepage = response.document.metadata.url || url;
+  return [resolvedHomepage, ...links].map(link => ({ url: link }));
+}
+
+async function discoverSearxngLinks({
+  url,
+  search,
+  limit,
+  abort,
+}: {
+  url: string;
+  search?: string;
+  limit: number;
+  abort: AbortSignal;
+}): Promise<MapDocument[]> {
+  if (!config.SEARXNG_ENDPOINT || limit <= 0) {
+    return [];
+  }
+
+  const urlObj = new URL(url);
+  const query = `${search ? `${search} ` : ""}site:${urlObj.hostname}`;
+  const results = await searxng_search(query, {
+    num_results: Math.min(limit, MAX_SEARXNG_FALLBACK_RESULTS),
+    timeout: 10000,
+    signal: abort,
+  });
+
+  return results.map(result => ({
+    url: result.url,
+    title: result.title,
+    description: result.description,
+  }));
 }
 
 function dedupeMapDocumentArray(documents: MapDocument[]): MapDocument[] {
@@ -134,6 +260,24 @@ export async function getMapResults({
   const id = providedId ?? uuidv7();
   let mapResults: MapDocument[] = [];
   const zeroDataRetention = getScrapeZDR(flags) === "forced" || false;
+  const mapLogger = _logger.child({
+    module: "map-utils",
+    method: "getMapResults",
+    jobId: id,
+    teamId,
+    zeroDataRetention,
+  });
+  const discovery: MapDiscoveryMetadata = {
+    fallbackAttempted: false,
+    fallbackUsed: false,
+    sources: {
+      index: 0,
+      fireEngine: 0,
+      sitemap: 0,
+      homepage: 0,
+      searxng: 0,
+    },
+  };
 
   const sc: StoredCrawl = {
     originUrl: url,
@@ -170,6 +314,7 @@ export async function getMapResults({
             url: x,
           });
         });
+        discovery.sources.sitemap += urls.length;
       },
       true,
       true,
@@ -243,6 +388,9 @@ export async function getMapResults({
       queryIndex(url, limit, useIndex, includeSubdomains),
       fetchAllPages(),
     ]);
+    const fireEngineResults = searchResults.flat();
+    discovery.sources.index = indexResults.length;
+    discovery.sources.fireEngine = fireEngineResults.length;
 
     if (!zeroDataRetention) {
       await redisEvictConnection.set(
@@ -261,6 +409,7 @@ export async function getMapResults({
       try {
         await crawler.tryGetSitemap(
           urls => {
+            discovery.sources.sitemap += urls.length;
             mapResults.push(
               ...urls.map(x => ({
                 url: x,
@@ -279,9 +428,81 @@ export async function getMapResults({
       }
     }
 
+    const standardDomainResults = dedupeMapDocumentArray(
+      mapResults
+        .concat(
+          fireEngineResults.map(x => ({
+            url: x.url,
+            title: x.title,
+            description: x.description,
+          })),
+        )
+        .filter(x => {
+          try {
+            return isSameDomain(x.url, url);
+          } catch (_) {
+            return false;
+          }
+        }),
+    );
+
+    let homepageResults: MapDocument[] = [];
+    let searxngResults: MapDocument[] = [];
+    if (shouldUseMapFallback(standardDomainResults.length, limit)) {
+      discovery.fallbackAttempted = true;
+      const remaining = Math.max(0, limit - standardDomainResults.length);
+      const [homepageOutcome, searxngOutcome] = await Promise.allSettled([
+        discoverHomepageLinks({
+          id,
+          url,
+          teamId,
+          orgId,
+          flags,
+          zeroDataRetention,
+          crawlerOptions,
+          location,
+          headers,
+          ignoreCache,
+          abort,
+        }),
+        discoverSearxngLinks({
+          url,
+          search,
+          limit: remaining,
+          abort,
+        }),
+      ]);
+
+      if (homepageOutcome.status === "fulfilled") {
+        homepageResults = homepageOutcome.value;
+        discovery.sources.homepage = homepageResults.length;
+      } else {
+        mapLogger.warn("Homepage link fallback failed", {
+          error: homepageOutcome.reason,
+        });
+      }
+
+      if (searxngOutcome.status === "fulfilled") {
+        searxngResults = searxngOutcome.value;
+        discovery.sources.searxng = searxngResults.length;
+      } else {
+        mapLogger.warn("SearXNG map fallback failed", {
+          error: searxngOutcome.reason,
+        });
+      }
+
+      discovery.fallbackUsed =
+        homepageResults.length > 0 || searxngResults.length > 0;
+      mapLogger.info("Map fallback completed", {
+        standardResults: standardDomainResults.length,
+        homepageResults: homepageResults.length,
+        searxngResults: searxngResults.length,
+      });
+    }
+
     if (search) {
-      mapResults = searchResults
-        .flat()
+      mapResults = fireEngineResults
+        .concat(searxngResults)
         .map<MapDocument>(
           x =>
             ({
@@ -290,14 +511,15 @@ export async function getMapResults({
               description: x.description,
             }) satisfies MapDocument,
         )
-        .concat(mapResults);
+        .concat(homepageResults, mapResults);
     } else {
       mapResults = mapResults.concat(
-        searchResults.flat().map(x => ({
+        fireEngineResults.concat(searxngResults).map(x => ({
           url: x.url,
           title: x.title,
           description: x.description,
         })),
+        homepageResults,
       );
     }
 
@@ -363,6 +585,7 @@ export async function getMapResults({
   return {
     success: true,
     mapResults,
+    discovery,
     job_id: id,
     time_taken: totalTimeMs,
   };

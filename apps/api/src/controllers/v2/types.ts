@@ -1481,6 +1481,17 @@ export type MapResponse =
       id: string;
       links?: MapDocument[];
       warning?: string;
+      discovery?: {
+        fallbackAttempted: boolean;
+        fallbackUsed: boolean;
+        sources: {
+          index: number;
+          fireEngine: number;
+          sitemap: number;
+          homepage: number;
+          searxng: number;
+        };
+      };
     };
 
 export type CrawlStatusParams = {
