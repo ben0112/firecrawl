@@ -92,6 +92,18 @@ services:
         compress: "true"
     tmpfs:
       - /tmp/.cache:noexec,nosuid,size=1g
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const s=require('net').connect(3000,'127.0.0.1',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
 
   api:
     <<: *common-service
@@ -108,7 +120,7 @@ services:
       redis:
         condition: service_started
       playwright-service:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     ports:

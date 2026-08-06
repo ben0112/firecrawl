@@ -29,4 +29,4 @@ EXPOSE ${PORT}
 
 USER node
 
-CMD [ "pnpm", "start" ]
+CMD [ "node", "dist/api.js" ]
