@@ -327,10 +327,6 @@ async function getMapResults({ url, search, limit = types_1.MAX_MAP_LIMIT, inclu
                 description: x.description,
             })), homepageResults);
         }
-        const minimumCutoff = Math.min(types_1.MAX_MAP_LIMIT, limit);
-        if (mapResults.length > minimumCutoff) {
-            mapResults = mapResults.slice(0, minimumCutoff);
-        }
         if (search) {
             const searchQuery = search.toLowerCase();
             mapResults = (0, map_cosine_1.performCosineSimilarityV2)(mapResults, searchQuery);

@@ -523,11 +523,6 @@ export async function getMapResults({
       );
     }
 
-    const minimumCutoff = Math.min(MAX_MAP_LIMIT, limit);
-    if (mapResults.length > minimumCutoff) {
-      mapResults = mapResults.slice(0, minimumCutoff);
-    }
-
     if (search) {
       const searchQuery = search.toLowerCase();
       mapResults = performCosineSimilarityV2(mapResults, searchQuery);

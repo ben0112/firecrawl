@@ -166,6 +166,36 @@ describe("self-hosted map fallback", () => {
     expect(mocks.searxngSearch).not.toHaveBeenCalled();
   });
 
+  it("applies the limit after invalid and duplicate fallback URLs are removed", async () => {
+    mocks.scrapeURL.mockResolvedValue({
+      success: true,
+      document: {
+        metadata: { url: "https://example.com/" },
+        links: [
+          "https://outside.example.net/page",
+          "https://example.com/about",
+          "https://example.com/about",
+          "https://example.com/news",
+        ],
+      },
+    });
+
+    const result = await getMapResults({
+      url: "https://example.com",
+      limit: 2,
+      includeSubdomains: true,
+      crawlerOptions: { sitemap: "skip" },
+      teamId: "test-team",
+      orgId: null,
+      flags: null,
+    });
+
+    expect(result.mapResults.map(item => item.url)).toEqual([
+      "https://example.com/",
+      "https://example.com/about",
+    ]);
+  });
+
   it("uses a small-result threshold without exceeding the requested limit", () => {
     expect(shouldUseMapFallback(0, 500)).toBe(true);
     expect(shouldUseMapFallback(9, 500)).toBe(true);
