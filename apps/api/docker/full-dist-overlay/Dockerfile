@@ -9,6 +9,7 @@ ARG GIT_SHA=unknown
 # dependencies from the same lockfile; the locally type-checked JavaScript
 # build replaces the complete application dist tree. This avoids running the
 # Go toolchain through QEMU when publishing an amd64 hotfix from Apple Silicon.
+RUN rm -rf /app/dist && mkdir -p /app/dist
 COPY --from=dist-context . /app/dist
 
 ENV FIRECRAWL_BUILD_SHA=$GIT_SHA
