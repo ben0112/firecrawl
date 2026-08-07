@@ -10,6 +10,7 @@ pnpm build
 docker buildx build \
   --platform linux/amd64 \
   --file docker/full-dist-overlay/Dockerfile \
+  --build-context dist-context=./dist \
   --build-arg GIT_SHA="$(git rev-parse HEAD)" \
   --tag example/firecrawl:latest \
   --push .
