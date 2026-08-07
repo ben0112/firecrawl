@@ -1147,6 +1147,9 @@ export const crawlerOptions = z.strictObject({
       "The delay parameter is measured in seconds and cannot exceed 60 seconds.",
     )
     .optional(),
+  // Self-hosted extension: allow the crawl source page to use a larger
+  // deadline without slowing every subsequently discovered page.
+  initialScrapeTimeout: z.int().positive().min(1000).optional(),
 });
 
 // export type CrawlerOptions = {
@@ -1654,6 +1657,7 @@ export function toV0CrawlerOptions(x: CrawlerOptions) {
     maxDiscoveryDepth: x.maxDiscoveryDepth,
     currentDiscoveryDepth: 0,
     delay: x.delay,
+    initialScrapeTimeout: x.initialScrapeTimeout,
   };
 }
 
@@ -1673,6 +1677,7 @@ export function toV2CrawlerOptions(x: any): CrawlerOptions {
     regexOnFullURL: x.regexOnFullURL,
     maxDiscoveryDepth: x.maxDiscoveryDepth,
     delay: x.delay,
+    initialScrapeTimeout: x.initialScrapeTimeout,
   };
 }
 
@@ -1698,6 +1703,7 @@ function fromV0CrawlerOptions(
       regexOnFullURL: x.regexOnFullURL,
       maxDiscoveryDepth: x.maxDiscoveryDepth,
       delay: x.delay,
+      initialScrapeTimeout: x.initialScrapeTimeout,
     }),
     internalOptions: {
       v0CrawlOnlyUrls: x.returnOnlyUrls,

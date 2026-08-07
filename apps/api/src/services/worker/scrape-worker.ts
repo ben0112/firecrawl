@@ -105,6 +105,7 @@ import {
   type ExchangeScrapeMetadata,
 } from "../../lib/exchange";
 import { emitScrapeActivityEvent } from "../../lib/siem-logging";
+import { crawlSourceScrapeOptions } from "./crawl-source-timeout";
 
 configDotenv();
 
@@ -1184,7 +1185,12 @@ async function processKickoffJob(job: NuQJob<ScrapeJobKickoff>) {
         mode: "single_urls",
         team_id: job.data.team_id,
         crawlerOptions: job.data.crawlerOptions,
-        scrapeOptions: scrapeOptions.parse(job.data.scrapeOptions),
+        scrapeOptions: scrapeOptions.parse(
+          crawlSourceScrapeOptions(
+            job.data.scrapeOptions,
+            job.data.crawlerOptions,
+          ),
+        ),
         internalOptions: sc.internalOptions,
         origin: job.data.origin,
         integration: job.data.integration,
