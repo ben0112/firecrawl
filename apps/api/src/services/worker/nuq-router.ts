@@ -498,6 +498,15 @@ class RoutedScrapeQueue {
     return scrapeQueuePg.getGroupNumericStats(groupId, logger);
   }
 
+  public async failPendingGroupJobs(
+    groupId: string,
+    failedReason: string,
+    logger: Logger = _logger,
+  ): Promise<{ backlogged: number; queued: number }> {
+    if (await this.isFdbGroup(groupId)) return { backlogged: 0, queued: 0 };
+    return scrapeQueuePg.failPendingGroupJobs(groupId, failedReason, logger);
+  }
+
   public async getCrawlJobsForListing(
     groupId: string,
     limit: number,

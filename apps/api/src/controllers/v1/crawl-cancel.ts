@@ -4,8 +4,9 @@ import { getCrawl, getCrawlJobs, saveCrawl } from "../../lib/crawl-redis";
 import * as Sentry from "@sentry/node";
 import { configDotenv } from "dotenv";
 import { RequestWithAuth } from "./types";
-import { crawlGroup } from "../../services/worker/nuq-router";
+import { crawlGroup, scrapeQueue } from "../../services/worker/nuq-router";
 import { removeConcurrencyLimitedJobs } from "../../lib/concurrency-limit";
+import { JobCancelledError } from "../../lib/error";
 configDotenv();
 
 export async function crawlCancelController(
@@ -43,6 +44,11 @@ export async function crawlCancelController(
     } else {
       const jobIds = await getCrawlJobs(req.params.jobId);
       await removeConcurrencyLimitedJobs(sc.team_id, jobIds);
+      await scrapeQueue.failPendingGroupJobs(
+        req.params.jobId,
+        new JobCancelledError().message,
+        logger,
+      );
     }
 
     res.json({

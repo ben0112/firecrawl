@@ -761,6 +761,69 @@ class NuQ<JobData = any, JobReturnValue = any> {
     }
   }
 
+  public async failPendingGroupJobs(
+    groupId: string,
+    failedReason: string,
+    _logger: Logger = logger,
+  ): Promise<{ backlogged: number; queued: number }> {
+    if (!this.options.backlog) return { backlogged: 0, queued: 0 };
+    const startedAt = Date.now();
+    const client = await nuqPool.connect();
+    try {
+      await client.query("BEGIN");
+      const moved = await client.query(
+        `
+          WITH moved AS (
+            DELETE FROM ${this.queueName}_backlog
+            WHERE group_id = $1
+            RETURNING id, data, created_at, priority, listen_channel_id, owner_id, group_id
+          ), inserted AS (
+            INSERT INTO ${this.queueName}
+              (id, status, data, created_at, priority, listen_channel_id, owner_id, group_id, finished_at, failedreason)
+            SELECT id, 'failed'::nuq.job_status, data, created_at, priority, listen_channel_id, owner_id, group_id, now(), $2
+            FROM moved
+            ON CONFLICT (id) DO NOTHING
+            RETURNING id
+          )
+          SELECT COUNT(*)::integer AS count FROM moved;
+        `,
+        [groupId, stripNulBytes(failedReason)],
+      );
+      const queued = await client.query(
+        `
+          UPDATE ${this.queueName}
+          SET status = 'failed'::nuq.job_status,
+              lock = null,
+              locked_at = null,
+              finished_at = now(),
+              failedreason = $2
+          WHERE group_id = $1
+            AND status = 'queued'::nuq.job_status
+          RETURNING id;
+        `,
+        [groupId, stripNulBytes(failedReason)],
+      );
+      await client.query("COMMIT");
+      const result = {
+        backlogged: Number(moved.rows[0]?.count || 0),
+        queued: Number(queued.rowCount || 0),
+      };
+      _logger.info("NuQ cancelled group pending jobs settled", {
+        module: "nuq",
+        method: "failPendingGroupJobs",
+        groupId,
+        ...result,
+        duration: Date.now() - startedAt,
+      });
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   public async getBackloggedOwnerIDs(
     _logger: Logger = logger,
   ): Promise<string[]> {

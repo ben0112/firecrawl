@@ -9,9 +9,10 @@ import {
 import * as Sentry from "@sentry/node";
 import { configDotenv } from "dotenv";
 import { RequestWithAuth, scrapeOptions } from "./types";
-import { crawlGroup } from "../../services/worker/nuq-router";
+import { crawlGroup, scrapeQueue } from "../../services/worker/nuq-router";
 import { normalizeOwnerId } from "../../lib/owner-id";
 import { removeConcurrencyLimitedJobs } from "../../lib/concurrency-limit";
+import { JobCancelledError } from "../../lib/error";
 configDotenv();
 
 export async function crawlCancelController(
@@ -57,6 +58,15 @@ export async function crawlCancelController(
     } else {
       const jobIds = await getCrawlJobs(req.params.jobId);
       await removeConcurrencyLimitedJobs(sc.team_id, jobIds);
+      const settled = await scrapeQueue.failPendingGroupJobs(
+        req.params.jobId,
+        new JobCancelledError().message,
+        logger,
+      );
+      logger.info("Cancelled crawl pending jobs settled without worker drain", {
+        crawlId: req.params.jobId,
+        ...settled,
+      });
     }
 
     res.json({
