@@ -768,7 +768,9 @@ class NuQ<JobData = any, JobReturnValue = any> {
     try {
       return (
         await nuqPool.query(
-          `SELECT DISTINCT owner_id FROM ${this.queueName}_backlog;`,
+          `SELECT DISTINCT COALESCE(NULLIF(data->>'team_id', ''), owner_id::text) AS owner_id
+           FROM ${this.queueName}_backlog
+           WHERE COALESCE(NULLIF(data->>'team_id', ''), owner_id::text) IS NOT NULL;`,
         )
       ).rows.map(row => row.owner_id);
     } finally {
@@ -789,7 +791,7 @@ class NuQ<JobData = any, JobReturnValue = any> {
       return (
         await nuqPool.query(
           `SELECT id FROM ${this.queueName}_backlog WHERE owner_id = $1;`,
-          [ownerId],
+          [normalizeOwnerId(ownerId)],
         )
       ).rows.map(row => row.id);
     } finally {
