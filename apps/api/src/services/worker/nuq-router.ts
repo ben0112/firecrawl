@@ -248,9 +248,11 @@ export async function fdbEnqueueScrapeJobs(
   teamLimit: number | null;
 }> {
   let teamLimit: number | null = null;
-  if (!isSelfHosted() && !fdbForced()) {
+  if (isSelfHosted()) {
+    teamLimit = Math.max(1, Math.floor(config.NUQ_WORKER_COUNT));
+  } else if (!fdbForced()) {
     teamLimit = (await autumnService.getConcurrencyLimit(teamId)) ?? 2;
-  } else if (!isSelfHosted()) {
+  } else {
     // fdbForced: leave unlimited (null) when Autumn has no concurrency value.
     teamLimit = await autumnService.getConcurrencyLimit(teamId);
   }

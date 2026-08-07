@@ -19,6 +19,8 @@ import {
   removeConcurrencyLimitActiveJob,
 } from "./concurrency-redis";
 import { autumnService } from "../services/autumn/autumn.service";
+import { config } from "../config";
+import { isSelfHosted } from "./deployment";
 
 // Fallback when Autumn can't give us a concurrency value.
 const DEFAULT_CONCURRENCY_LIMIT = 2;
@@ -33,6 +35,9 @@ export async function getEffectiveConcurrencyLimit(
   teamId: string,
   orgId?: string | null,
 ): Promise<number> {
+  if (isSelfHosted()) {
+    return Math.max(1, Math.floor(config.NUQ_WORKER_COUNT));
+  }
   const autumnValue = await autumnService.getConcurrencyLimit(teamId, orgId);
   return autumnValue ?? DEFAULT_CONCURRENCY_LIMIT;
 }

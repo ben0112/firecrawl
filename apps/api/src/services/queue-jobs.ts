@@ -368,10 +368,7 @@ async function addScrapeJobRaw(
   let currentCrawlConcurrency: number | null = null;
   let maxCrawlConcurrency: number | null = null;
 
-  // Bypass concurrency limits for self-hosted deployments
-  if (isSelfHosted()) {
-    concurrencyLimited = "no";
-  } else if (directToBullMQ) {
+  if (directToBullMQ) {
     concurrencyLimited = "no";
   } else {
     if (webScraperOptions.crawl_id) {
@@ -447,7 +444,7 @@ async function addScrapeJobRaw(
       // Detect if they hit their concurrent limit
       // If above by 2x, send them an email
       // No need to 2x as if there are more than the max concurrency in the concurrency queue, it is already 2x
-      if (concurrencyQueueJobs > maxConcurrency) {
+      if (!isSelfHosted() && concurrencyQueueJobs > maxConcurrency) {
         // logger.info("Concurrency limited 2x (single) - ", "Concurrency queue jobs: ", concurrencyQueueJobs, "Max concurrency: ", maxConcurrency, "Team ID: ", webScraperOptions.team_id);
 
         // Only send notification if it's not a crawl or batch scrape
@@ -680,42 +677,35 @@ export async function addScrapeJobs(
     // All jobs without a crawl ID may be in the CQ depending on the global team concurrency limit
     jobsPotentiallyInCQ.push(...jobsWithoutCrawlID);
 
-    // Bypass concurrency limits for self-hosted deployments
     let addToBull: typeof jobsPotentiallyInCQ;
     let addToCQ: typeof jobsPotentiallyInCQ;
     let maxConcurrency = 0;
     let currentActiveConcurrency: number | null = null;
     let countCanBeDirectlyAdded = 0;
 
-    if (isSelfHosted()) {
-      // For self-hosted, add all jobs directly to BullMQ
-      addToBull = jobsPotentiallyInCQ;
-      addToCQ = jobsForcedToCQ;
-    } else {
-      const now = Date.now();
-      maxConcurrency = await getEffectiveConcurrencyLimit(teamId);
-      await cleanOldConcurrencyLimitEntries(teamId, now);
+    const now = Date.now();
+    maxConcurrency = await getEffectiveConcurrencyLimit(teamId);
+    await cleanOldConcurrencyLimitEntries(teamId, now);
 
-      currentActiveConcurrency = (
-        await getConcurrencyLimitActiveJobs(teamId, now)
-      ).length;
+    currentActiveConcurrency = (
+      await getConcurrencyLimitActiveJobs(teamId, now)
+    ).length;
 
-      countCanBeDirectlyAdded = Math.max(
-        maxConcurrency - currentActiveConcurrency,
-        0,
-      );
+    countCanBeDirectlyAdded = Math.max(
+      maxConcurrency - currentActiveConcurrency,
+      0,
+    );
 
-      addToBull = jobsPotentiallyInCQ.slice(0, countCanBeDirectlyAdded);
-      addToCQ = jobsPotentiallyInCQ
-        .slice(countCanBeDirectlyAdded)
-        .concat(jobsForcedToCQ);
+    addToBull = jobsPotentiallyInCQ.slice(0, countCanBeDirectlyAdded);
+    addToCQ = jobsPotentiallyInCQ
+      .slice(countCanBeDirectlyAdded)
+      .concat(jobsForcedToCQ);
 
-      if (addToCQ.length > 0) {
-        const currentQueueSize = await getConcurrencyQueueJobsCount(teamId);
-        const queueLimit = getTeamQueueLimit(maxConcurrency);
-        if (currentQueueSize + addToCQ.length > queueLimit) {
-          throw new QueueFullError(currentQueueSize, queueLimit);
-        }
+    if (addToCQ.length > 0) {
+      const currentQueueSize = await getConcurrencyQueueJobsCount(teamId);
+      const queueLimit = getTeamQueueLimit(maxConcurrency);
+      if (currentQueueSize + addToCQ.length > queueLimit) {
+        throw new QueueFullError(currentQueueSize, queueLimit);
       }
     }
 

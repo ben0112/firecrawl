@@ -1331,12 +1331,29 @@ class NuQ<JobData = any, JobReturnValue = any> {
   public async prefetchJobs(_logger: Logger = logger): Promise<number> {
     const start = Date.now();
     try {
+      // Keep one worker-load of jobs buffered in RabbitMQ without turning
+      // hundreds of queued rows into "active" work. This keeps FIFO backlog
+      // state observable and prevents the API process from accumulating a
+      // very large prefetched message set during high-concurrency crawls.
+      const activeTarget = Math.max(1, Math.floor(config.NUQ_WORKER_COUNT) * 2);
       const jobs = (
         await nuqPool.query(
           `
-            WITH next AS (SELECT id FROM ${this.queueName} WHERE ${this.queueName}.status = 'queued'::nuq.job_status ORDER BY ${this.queueName}.priority ASC, ${this.queueName}.created_at ASC FOR UPDATE SKIP LOCKED LIMIT 500)
+            WITH active_count AS (
+              SELECT COUNT(*)::integer AS count
+              FROM ${this.queueName}
+              WHERE ${this.queueName}.status = 'active'::nuq.job_status
+            ), next AS (
+              SELECT id
+              FROM ${this.queueName}
+              WHERE ${this.queueName}.status = 'queued'::nuq.job_status
+              ORDER BY ${this.queueName}.priority ASC, ${this.queueName}.created_at ASC
+              FOR UPDATE SKIP LOCKED
+              LIMIT (SELECT GREATEST($1 - count, 0) FROM active_count)
+            )
             UPDATE ${this.queueName} q SET status = 'active'::nuq.job_status, lock = gen_random_uuid(), locked_at = now() FROM next WHERE q.id = next.id RETURNING ${this.jobReturning.map(x => `q.${x}`).join(", ")};
           `,
+          [activeTarget],
         )
       ).rows.map(row => this.rowToJob(row)!);
 

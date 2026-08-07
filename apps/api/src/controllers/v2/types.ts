@@ -1065,7 +1065,7 @@ const batchScrapeRequestSchemaBase = baseScrapeOptions.extend({
   webhook: webhookSchema.optional(),
   appendToId: z.uuid().optional(),
   ignoreInvalidURLs: z.boolean().prefault(true),
-  maxConcurrency: z.int().positive().optional(),
+  maxConcurrency: z.int().nonnegative().optional(),
   zeroDataRetention: z.boolean().optional(),
   __agentInterop: z
     .object({
@@ -1089,7 +1089,7 @@ const batchScrapeRequestSchemaNoURLValidationBase = baseScrapeOptions.extend({
   webhook: webhookSchema.optional(),
   appendToId: z.uuid().optional(),
   ignoreInvalidURLs: z.boolean().prefault(true),
-  maxConcurrency: z.int().positive().optional(),
+  maxConcurrency: z.int().nonnegative().optional(),
   zeroDataRetention: z.boolean().optional(),
   __agentInterop: z
     .object({
@@ -1168,7 +1168,7 @@ const crawlRequestSchemaBase = crawlerOptions.extend({
   scrapeOptions: baseScrapeOptions.prefault(() => baseScrapeOptions.parse({})),
   webhook: webhookSchema.optional(),
   limit: z.number().prefault(10000),
-  maxConcurrency: z.int().positive().optional(),
+  maxConcurrency: z.int().nonnegative().optional(),
   zeroDataRetention: z.boolean().optional(),
   prompt: z.string().max(10000).optional(),
 });
