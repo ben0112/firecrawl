@@ -137,12 +137,14 @@ const ALWAYS_ALLOWED_PREFIXES = [
   "keyless",
 ];
 
-const ALWAYS_ALLOWED_PATHS = new Set(["/v2/admin-ui-capabilities"]);
+const ALWAYS_ALLOWED_PATHS = new Set(["v2/admin-ui-capabilities"]);
 
 function matchSegments(segments: string[], pattern: string[]): boolean {
   if (segments.length < pattern.length) return false;
   return pattern.every((part, i) =>
-    part === ":jobId" ? segments[i].length > 0 : segments[i] === part,
+    part === ":jobId"
+      ? segments[i].length > 0
+      : segments[i].toLowerCase() === part,
   );
 }
 
@@ -156,7 +158,7 @@ type EndpointClassification =
 export function classifyEndpoint(rawUrl: string): EndpointClassification {
   const pathname = rawUrl.split("?")[0];
   const segments = pathname.split("/").filter(s => s.length > 0);
-  const version = segments[0];
+  const version = segments[0]?.toLowerCase();
   if (version === "v0") {
     return { api: "v0" };
   }
@@ -164,12 +166,18 @@ export function classifyEndpoint(rawUrl: string): EndpointClassification {
     return null;
   }
 
-  if (ALWAYS_ALLOWED_PATHS.has(pathname)) {
+  const normalizedPath = segments
+    .map(segment => segment.toLowerCase())
+    .join("/");
+  if (ALWAYS_ALLOWED_PATHS.has(normalizedPath)) {
     return { api: version, group: null, alwaysAllowed: true };
   }
 
   const rest = segments.slice(1);
-  if (rest.length > 0 && ALWAYS_ALLOWED_PREFIXES.includes(rest[0])) {
+  if (
+    rest.length > 0 &&
+    ALWAYS_ALLOWED_PREFIXES.includes(rest[0].toLowerCase())
+  ) {
     return { api: version, group: null, alwaysAllowed: true };
   }
 

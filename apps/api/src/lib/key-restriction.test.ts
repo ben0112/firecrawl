@@ -41,6 +41,33 @@ describe("classifyEndpoint", () => {
     expect(classifyEndpoint("/v2/parse")).toMatchObject({ group: "parse" });
   });
 
+  it.each([
+    ["/V2/SCRAPE", "scrape"],
+    ["/V2/BATCH/SCRAPE", "batch-scrape"],
+    ["/V2/CRAWL", "crawl"],
+    ["/V2/MAP", "map"],
+    ["/V2/SEARCH/RESEARCH", "research"],
+    ["/V2/SEARCH/DEVELOPER", "research"],
+    ["/V2/SEARCH", "search"],
+    ["/V2/EXTRACT", "extract"],
+    ["/V2/AGENT", "agent"],
+    ["/V2/PARSE", "parse"],
+    ["/V2/BROWSER", "browser"],
+    ["/V2/INTERACT", "browser"],
+    ["/V2/MONITOR", "monitor"],
+    ["/V2/RESEARCH", "research"],
+    ["/V2/DEVELOPER", "research"],
+    ["/V2/LLMSTXT", "llmstxt"],
+    ["/V2/DEEP-RESEARCH", "deep-research"],
+    ["/V2/FIRECLAW", "fireclaw"],
+  ])("classifies uppercase static route %s as %s", (path, group) => {
+    expect(classifyEndpoint(path)).toEqual({
+      api: "v2",
+      group,
+      alwaysAllowed: false,
+    });
+  });
+
   it("groups job status/cancel endpoints with their job type", () => {
     expect(classifyEndpoint("/v2/scrape/abc-123")).toMatchObject({
       group: "scrape",
@@ -72,6 +99,9 @@ describe("classifyEndpoint", () => {
     expect(classifyEndpoint("/v2/interact/abc-123")).toMatchObject({
       group: "browser",
     });
+    expect(
+      classifyEndpoint("/V2/SCRAPE/CaseSensitiveJobId/INTERACT"),
+    ).toMatchObject({ group: "browser" });
   });
 
   it("distinguishes research from search despite the nested path", () => {
@@ -108,10 +138,27 @@ describe("classifyEndpoint", () => {
     expect(
       classifyEndpoint("/v2/admin-ui-capabilities?source=admin"),
     ).toMatchObject({ alwaysAllowed: true });
-    expect(classifyEndpoint("/v1/admin-ui-capabilities")).toMatchObject({
+    expect(classifyEndpoint("/V2/TEAM/CREDIT-USAGE")).toMatchObject({
+      alwaysAllowed: true,
+    });
+    expect(classifyEndpoint("/V2/CONCURRENCY-CHECK")).toMatchObject({
+      alwaysAllowed: true,
+    });
+    expect(classifyEndpoint("/V2/ADMIN-UI-CAPABILITIES")).toEqual({
+      api: "v2",
+      group: null,
+      alwaysAllowed: true,
+    });
+    expect(
+      classifyEndpoint("/V2/ADMIN-UI-CAPABILITIES?source=admin"),
+    ).toMatchObject({ alwaysAllowed: true });
+    expect(classifyEndpoint("/v2/admin-ui-capabilities/")).toMatchObject({
+      alwaysAllowed: true,
+    });
+    expect(classifyEndpoint("/V1/ADMIN-UI-CAPABILITIES")).toMatchObject({
       alwaysAllowed: false,
     });
-    expect(classifyEndpoint("/v2/admin-ui-capabilities/child")).toMatchObject({
+    expect(classifyEndpoint("/V2/ADMIN-UI-CAPABILITIES/child")).toMatchObject({
       alwaysAllowed: false,
     });
     expect(classifyEndpoint("/v1/team/queue-status")).toMatchObject({
@@ -121,6 +168,9 @@ describe("classifyEndpoint", () => {
 
   it("classifies v0 and non-API paths", () => {
     expect(classifyEndpoint("/v0/scrape")).toEqual({ api: "v0" });
+    expect(classifyEndpoint("/V0/SCRAPE")).toEqual({ api: "v0" });
+    expect(classifyEndpoint("/V3/AGENT")).toBeNull();
+    expect(classifyEndpoint("/AGENT")).toBeNull();
     expect(classifyEndpoint("/admin/xyz/redis-health")).toBeNull();
     expect(classifyEndpoint("/is-production")).toBeNull();
   });
@@ -159,6 +209,19 @@ describe("isEndpointAllowed", () => {
     expect(isEndpointAllowed("/v2/search", c).allowed).toBe(false);
   });
 
+  it("denies uppercase routes outside the endpoint allowlist", () => {
+    const c = config({ allowedEndpoints: ["scrape"] });
+    expect(classifyEndpoint("/V2/AGENT")).toEqual({
+      api: "v2",
+      group: "agent",
+      alwaysAllowed: false,
+    });
+    expect(isEndpointAllowed("/V2/AGENT", c)).toMatchObject({
+      allowed: false,
+      status: 403,
+    });
+  });
+
   it("gates developer search on the research group, not the web-search group", () => {
     const research = config({ allowedEndpoints: ["research"] });
     expect(
@@ -184,11 +247,17 @@ describe("isEndpointAllowed", () => {
     expect(
       isEndpointAllowed("/v2/admin-ui-capabilities?source=admin", c).allowed,
     ).toBe(true);
-    expect(isEndpointAllowed("/v1/admin-ui-capabilities", c).allowed).toBe(
+    expect(
+      isEndpointAllowed("/V2/ADMIN-UI-CAPABILITIES?source=admin", c).allowed,
+    ).toBe(true);
+    expect(isEndpointAllowed("/v2/admin-ui-capabilities/", c).allowed).toBe(
+      true,
+    );
+    expect(isEndpointAllowed("/V1/ADMIN-UI-CAPABILITIES", c).allowed).toBe(
       false,
     );
     expect(
-      isEndpointAllowed("/v2/admin-ui-capabilities/child", c).allowed,
+      isEndpointAllowed("/V2/ADMIN-UI-CAPABILITIES/child", c).allowed,
     ).toBe(false);
   });
 
