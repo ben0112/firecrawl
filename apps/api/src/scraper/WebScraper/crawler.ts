@@ -807,7 +807,11 @@ export class WebCrawler {
 
   private async extractLinksFromMarkdownContent(text: string, url: string) {
     const filteredLinks: string[] = [];
-    for (const link of extractLinksFromMarkdown(text, url)) {
+    for (const link of extractLinksFromMarkdown(
+      text,
+      url,
+      isBareExternalReference,
+    )) {
       const filterResult = await this.filterURL(link, url);
       if (filterResult.allowed && filterResult.url) {
         filteredLinks.push(filterResult.url);

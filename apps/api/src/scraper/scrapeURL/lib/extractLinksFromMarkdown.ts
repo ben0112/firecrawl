@@ -63,6 +63,7 @@ function resolve(
   href: string,
   baseUrl: string,
   trimPunctuation: boolean,
+  rejectCandidate?: (candidate: string) => boolean,
 ): string | null {
   let candidate = href.trim();
 
@@ -78,6 +79,9 @@ function resolve(
   if (candidate === "" || candidate.startsWith("#")) {
     return null;
   }
+  if (rejectCandidate?.(candidate)) {
+    return null;
+  }
 
   try {
     return new URL(candidate, baseUrl).href;
@@ -90,12 +94,13 @@ function resolve(
 export function extractLinksFromMarkdown(
   text: string,
   baseUrl: string,
+  rejectCandidate?: (candidate: string) => boolean,
 ): string[] {
   const body = stripCode(text).replace(IMAGE, " ");
   const links: string[] = [];
 
   const push = (href: string, trimPunctuation = false) => {
-    const resolved = resolve(href, baseUrl, trimPunctuation);
+    const resolved = resolve(href, baseUrl, trimPunctuation, rejectCandidate);
     if (resolved) {
       links.push(resolved);
     }

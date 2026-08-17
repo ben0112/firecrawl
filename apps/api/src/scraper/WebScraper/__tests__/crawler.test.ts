@@ -65,6 +65,23 @@ describe("WebCrawler", () => {
     expect(links).toEqual([]);
   });
 
+  it("rejects bare markdown host and email references while preserving relative documents", async () => {
+    crawler = new WebCrawler({
+      jobId: "TEST",
+      initialUrl: "https://example.com/reports/source.txt",
+      includes: [],
+      excludes: [],
+    });
+
+    const links = await crawler.extractLinksFromContent(
+      "[KPMG](assets.kpmg.com) [Email](person@example.com) [Report](report.pdf)",
+      "https://example.com/reports/source.txt",
+      "text/markdown",
+    );
+
+    expect(links).toEqual(["https://example.com/reports/report.pdf"]);
+  });
+
   it("should respect the limit parameter by not returning more links than specified", async () => {
     const initialUrl = "http://example.com";
     const limit = 2; // Set a limit for the number of links
