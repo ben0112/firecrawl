@@ -131,12 +131,13 @@ const ENDPOINT_GROUPS: [string[], string][] = [
 const ALWAYS_ALLOWED_PREFIXES = [
   "team",
   "concurrency-check",
-  "admin-ui-capabilities",
   "feedback",
   "slack",
   "support",
   "keyless",
 ];
+
+const ALWAYS_ALLOWED_PATHS = new Set(["/v2/admin-ui-capabilities"]);
 
 function matchSegments(segments: string[], pattern: string[]): boolean {
   if (segments.length < pattern.length) return false;
@@ -161,6 +162,10 @@ export function classifyEndpoint(rawUrl: string): EndpointClassification {
   }
   if (version !== "v1" && version !== "v2") {
     return null;
+  }
+
+  if (ALWAYS_ALLOWED_PATHS.has(pathname)) {
+    return { api: version, group: null, alwaysAllowed: true };
   }
 
   const rest = segments.slice(1);

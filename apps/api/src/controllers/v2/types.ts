@@ -1547,12 +1547,15 @@ export type AdminUiCapabilitiesResponse = {
   success: true;
   contractVersion: 1;
   coreRevision: string;
+  runtime: {
+    queueBackend: "pg" | "fdb";
+  };
   features: {
-    dynamicCrawlConcurrency: true;
-    zeroConcurrencyPause: true;
-    initialScrapeTimeout: true;
-    failedCount: true;
-    mapDiscoveryDiagnostics: true;
+    dynamicCrawlConcurrency: boolean;
+    zeroConcurrencyPause: boolean;
+    initialScrapeTimeout: boolean;
+    failedCount: boolean;
+    mapDiscoveryDiagnostics: boolean;
   };
 };
 

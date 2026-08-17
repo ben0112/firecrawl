@@ -3,6 +3,7 @@ import multer from "multer";
 import { config } from "../config";
 import { RateLimiterMode } from "../types";
 import { registerMcpActionLogReadRoute } from "./mcp-action-logs";
+import { registerAdminUiCapabilitiesRoute } from "./admin-ui-capabilities";
 import { SEARCH_CREDITS_FEATURE_ID } from "../services/autumn/autumn.service";
 import expressWs from "express-ws";
 import { searchController } from "../controllers/v2/search";
@@ -33,7 +34,6 @@ import { tokenUsageController } from "../controllers/v2/token-usage";
 import { crawlCancelController } from "../controllers/v2/crawl-cancel";
 import { crawlConcurrencyController } from "../controllers/v2/crawl-concurrency";
 import { concurrencyCheckController } from "../controllers/v2/concurrency-check";
-import { adminUiCapabilitiesController } from "../controllers/v2/admin-ui-capabilities";
 import { crawlStatusWSController } from "../controllers/v2/crawl-status-ws";
 import { extractController } from "../controllers/v2/extract";
 import { extractStatusController } from "../controllers/v2/extract-status";
@@ -458,10 +458,9 @@ v2Router.get(
   wrap(concurrencyCheckController),
 );
 
-v2Router.get(
-  "/admin-ui-capabilities",
+registerAdminUiCapabilitiesRoute(
+  v2Router,
   authMiddleware(RateLimiterMode.CrawlStatus),
-  wrap(adminUiCapabilitiesController),
 );
 
 v2Router.get(

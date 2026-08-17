@@ -40,6 +40,16 @@ Get this baseline working before swapping backends or adding providers.
 The root `.env` overrides only variables referenced by `docker-compose.yaml`.
 Do not use `apps/api/.env.example` as a drop-in Compose contract.
 
+Build and start the stack from the repository root with the checked-out
+revision embedded in the API image:
+
+```bash
+GIT_SHA="$(git rev-parse HEAD)" docker compose up --build
+```
+
+The Compose source build intentionally refuses to start without `GIT_SHA` so
+the API can report the exact core revision it was built from.
+
 ## What the stack runs
 
 At this revision, Compose runs the Firecrawl API and workers, Playwright, Redis,

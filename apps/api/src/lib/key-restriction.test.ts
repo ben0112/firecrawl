@@ -105,6 +105,15 @@ describe("classifyEndpoint", () => {
       group: null,
       alwaysAllowed: true,
     });
+    expect(
+      classifyEndpoint("/v2/admin-ui-capabilities?source=admin"),
+    ).toMatchObject({ alwaysAllowed: true });
+    expect(classifyEndpoint("/v1/admin-ui-capabilities")).toMatchObject({
+      alwaysAllowed: false,
+    });
+    expect(classifyEndpoint("/v2/admin-ui-capabilities/child")).toMatchObject({
+      alwaysAllowed: false,
+    });
     expect(classifyEndpoint("/v1/team/queue-status")).toMatchObject({
       alwaysAllowed: true,
     });
@@ -172,6 +181,15 @@ describe("isEndpointAllowed", () => {
     expect(isEndpointAllowed("/v2/admin-ui-capabilities", c).allowed).toBe(
       true,
     );
+    expect(
+      isEndpointAllowed("/v2/admin-ui-capabilities?source=admin", c).allowed,
+    ).toBe(true);
+    expect(isEndpointAllowed("/v1/admin-ui-capabilities", c).allowed).toBe(
+      false,
+    );
+    expect(
+      isEndpointAllowed("/v2/admin-ui-capabilities/child", c).allowed,
+    ).toBe(false);
   });
 
   it("denies unknown v2 endpoints when an allowlist is set", () => {
