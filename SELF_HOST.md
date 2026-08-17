@@ -44,11 +44,17 @@ Build and start the stack from the repository root with the checked-out
 revision embedded in the API image:
 
 ```bash
-GIT_SHA="$(git rev-parse HEAD)" docker compose up --build
+export GIT_SHA="$(git rev-parse HEAD)"
+docker compose up --build
 ```
 
 The Compose source build intentionally refuses to start without `GIT_SHA` so
 the API can report the exact core revision it was built from.
+
+Later `docker compose ps`, `docker compose logs`, and `docker compose down`
+commands evaluate the same required variable. In a new shell, re-export the
+same `GIT_SHA` before running them. Alternatively, persist
+`GIT_SHA=<full SHA>` in the ignored root `.env` until the next rebuild.
 
 ## What the stack runs
 

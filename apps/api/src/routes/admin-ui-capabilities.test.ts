@@ -108,7 +108,14 @@ describe("admin UI capabilities route", () => {
       /build:\s*\n\s+context: apps\/api\s*\n\s+args:\s*\n\s+GIT_SHA: \$\{GIT_SHA:\?[^}]+\}/,
     );
     expect(selfHostSource).toContain(
-      'GIT_SHA="$(git rev-parse HEAD)" docker compose up --build',
+      'export GIT_SHA="$(git rev-parse HEAD)"\ndocker compose up --build',
     );
+    expect(selfHostSource).toMatch(/re-export the\s+same `GIT_SHA`/);
+    for (const command of ["ps", "logs", "down"]) {
+      expect(selfHostSource).toContain(`docker compose ${command}`);
+    }
+    expect(selfHostSource).toContain("`GIT_SHA=<full SHA>`");
+    expect(selfHostSource).toContain("ignored root `.env`");
+    expect(selfHostSource).toContain("until the next rebuild");
   });
 });
