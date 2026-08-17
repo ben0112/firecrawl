@@ -33,6 +33,7 @@ import { tokenUsageController } from "../controllers/v2/token-usage";
 import { crawlCancelController } from "../controllers/v2/crawl-cancel";
 import { crawlConcurrencyController } from "../controllers/v2/crawl-concurrency";
 import { concurrencyCheckController } from "../controllers/v2/concurrency-check";
+import { adminUiCapabilitiesController } from "../controllers/v2/admin-ui-capabilities";
 import { crawlStatusWSController } from "../controllers/v2/crawl-status-ws";
 import { extractController } from "../controllers/v2/extract";
 import { extractStatusController } from "../controllers/v2/extract-status";
@@ -455,6 +456,12 @@ v2Router.get(
   "/concurrency-check",
   authMiddleware(RateLimiterMode.CrawlStatus),
   wrap(concurrencyCheckController),
+);
+
+v2Router.get(
+  "/admin-ui-capabilities",
+  authMiddleware(RateLimiterMode.CrawlStatus),
+  wrap(adminUiCapabilitiesController),
 );
 
 v2Router.get(

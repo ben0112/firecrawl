@@ -100,6 +100,11 @@ describe("classifyEndpoint", () => {
     expect(classifyEndpoint("/v2/concurrency-check")).toMatchObject({
       alwaysAllowed: true,
     });
+    expect(classifyEndpoint("/v2/admin-ui-capabilities")).toEqual({
+      api: "v2",
+      group: null,
+      alwaysAllowed: true,
+    });
     expect(classifyEndpoint("/v1/team/queue-status")).toMatchObject({
       alwaysAllowed: true,
     });
@@ -164,6 +169,9 @@ describe("isEndpointAllowed", () => {
     const c = config({ allowedEndpoints: ["scrape"] });
     expect(isEndpointAllowed("/v2/team/credit-usage", c).allowed).toBe(true);
     expect(isEndpointAllowed("/v2/concurrency-check", c).allowed).toBe(true);
+    expect(isEndpointAllowed("/v2/admin-ui-capabilities", c).allowed).toBe(
+      true,
+    );
   });
 
   it("denies unknown v2 endpoints when an allowlist is set", () => {

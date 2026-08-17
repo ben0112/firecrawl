@@ -1541,6 +1541,21 @@ export type ConcurrencyCheckResponse =
       maxConcurrency: number;
     };
 
+export type AdminUiCapabilitiesParams = Record<string, never>;
+
+export type AdminUiCapabilitiesResponse = {
+  success: true;
+  contractVersion: 1;
+  coreRevision: string;
+  features: {
+    dynamicCrawlConcurrency: true;
+    zeroConcurrencyPause: true;
+    initialScrapeTimeout: true;
+    failedCount: true;
+    mapDiscoveryDiagnostics: true;
+  };
+};
+
 export type CrawlStatusResponse =
   | ErrorResponse
   | {

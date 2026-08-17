@@ -131,6 +131,7 @@ const ENDPOINT_GROUPS: [string[], string][] = [
 const ALWAYS_ALLOWED_PREFIXES = [
   "team",
   "concurrency-check",
+  "admin-ui-capabilities",
   "feedback",
   "slack",
   "support",
