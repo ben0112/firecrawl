@@ -57,7 +57,7 @@ describe("WebCrawler", () => {
       excludes: [],
     });
 
-    const links = await crawler["extractLinksFromHTML"](
+    const links = await crawler.extractLinksFromContent(
       '<a href="assets.kpmg.com">KPMG</a><a href="person@example.com">mail</a>',
       "https://example.com/reports/index/source.pdf",
     );

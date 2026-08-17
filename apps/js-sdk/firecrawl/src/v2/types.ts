@@ -207,6 +207,10 @@ export interface ScrapeOptions {
   useMock?: string;
   blockAds?: boolean;
   proxy?: "basic" | "stealth" | "enhanced" | "auto" | string;
+  /**
+   * Maximum age, in milliseconds, of indexed content that may be reused.
+   * Set to `0` to bypass index reuse.
+   */
   maxAge?: number;
   minAge?: number;
   storeInCache?: boolean;
@@ -324,6 +328,7 @@ export interface AgentWebhookConfig {
 
 export interface BrandingProfile {
   colorScheme?: "light" | "dark";
+  brandName?: string;
   logo?: string | null;
   fonts?: Array<{
     family: string;
@@ -558,6 +563,7 @@ export interface DocumentMetadata {
   // Common metadata fields
   title?: string;
   description?: string;
+  /** URL reported by the selected scrape engine. */
   url?: string;
   language?: string;
   keywords?: string | string[];
@@ -594,7 +600,9 @@ export interface DocumentMetadata {
   articleSection?: string;
 
   // Response-level metadata
+  /** URL requested for the scrape. */
   sourceURL?: string;
+  /** HTTP status code reported for the scrape response. */
   statusCode?: number;
   scrapeId?: string;
   numPages?: number;
@@ -687,6 +695,28 @@ export interface SearchData {
   developer?: Array<SearchResultWeb | Document>;
 }
 
+/**
+ * Narrows ordinary **web search**. A category does not switch `search()` to a
+ * different index.
+ *
+ * - `github` — restrict web results to github.com (a `site:` filter).
+ * - `research` — restrict web results to a fixed list of ~14 academic
+ *   *websites* (arxiv.org, pubmed.ncbi.nlm.nih.gov, nature.com, science.org,
+ *   ieee.org, sciencedirect.com, biorxiv.org, medrxiv.org, ...). It returns
+ *   ordinary web page results from those domains, **not** paper records.
+ * - `pdf` — restrict results to PDFs (adds `filetype:pdf`).
+ * - `developer` — add developer results (issues, pull requests, READMEs and
+ *   documentation) under `.developer`.
+ *
+ * ⚠️ `categories: ["research"]` is **not** Firecrawl's research paper index.
+ * To search papers themselves — ~43M abstracts, roughly 90% biomedical
+ * (PubMed, bioRxiv, medRxiv) plus arXiv — with full abstracts, in-body passage
+ * reads and citation-graph expansion, use `firecrawl.research.searchPapers()`
+ * (plus `getPaper()` and `similarPapers()`), which call `/v2/search/research`.
+ *
+ * Rule of thumb: literature search → `research.searchPapers()`; web pages that
+ * happen to live on academic domains → `search({ categories: ["research"] })`.
+ */
 export interface CategoryOption {
   type: "github" | "research" | "pdf" | "developer";
 }
@@ -696,6 +726,14 @@ export interface SearchRequest {
   sources?: Array<
     "web" | "news" | "images" | { type: "web" | "news" | "images" }
   >;
+  /**
+   * Narrow web search by category. See {@link CategoryOption}.
+   *
+   * ⚠️ `"research"` is a website/domain filter over ordinary web search (~14
+   * academic domains), **not** the research paper index. For literature search
+   * over ~43M paper abstracts (PubMed / bioRxiv / medRxiv / arXiv) use
+   * `firecrawl.research.searchPapers()` instead.
+   */
   categories?: Array<
     "github" | "research" | "pdf" | "developer" | CategoryOption
   >;
@@ -1357,8 +1395,20 @@ export interface BrowserListResponse {
 // ---------- Research (v2) ----------
 
 /**
- * Source identifiers grouped by namespace. Currently only `arxiv` is
- * populated; each value is an array of ids in that namespace.
+ * Source identifiers grouped by namespace. Each key is a namespace and each
+ * value is an array of ids in that namespace.
+ *
+ * Which namespaces appear depends on the paper's source. Biomedical records
+ * (PubMed, bioRxiv, medRxiv) typically carry `pmid`, `pmcid` and/or `doi`;
+ * arXiv records carry `arxiv`. The set is open — treat this as a lookup by
+ * namespace rather than a fixed schema, and prefer {@link PaperResult.primaryId}
+ * when you just need one citable identifier.
+ *
+ * @example
+ * ```ts
+ * const doi = paper.ids?.doi?.[0];
+ * const pmid = paper.ids?.pmid?.[0];
+ * ```
  */
 export type IdMap = Record<string, string[]>;
 
@@ -1374,7 +1424,7 @@ export interface PaperSignals {
   seedOverlap: number;
 }
 
-/** A ranked paper. `paperId` is canonical; arXiv lives in `ids`. */
+/** A ranked paper. `paperId` is canonical; source ids (pmid, pmcid, doi, arxiv, ...) live in `ids`. */
 export interface PaperResult {
   /** Canonical paper id — the Milvus INT64 primary key as a decimal string. */
   paperId: string;
@@ -1454,7 +1504,7 @@ export interface GitHubScoreBreakdown {
 }
 
 export interface GitHubSearchItem {
-  resultType: "github_history" | "repo_readme" | "web";
+  resultType?: "github_history" | "repo_readme" | "web";
   /** `owner/name`; empty for web results whose URL is not a repo page. */
   repo: string;
   url: string;
