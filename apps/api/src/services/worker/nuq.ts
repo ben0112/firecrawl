@@ -4,6 +4,10 @@ import { Client, Pool } from "pg";
 import { type ScrapeJobData } from "../../types";
 import { withSpan, setSpanAttributes } from "../../lib/otel-tracer";
 import amqp from "amqplib";
+import {
+  clearRabbitMqSenderIfCurrent,
+  sendRabbitMqJobEndBestEffort,
+} from "./nuq-rabbitmq-notification";
 import { normalizeOwnerId } from "../../lib/owner-id";
 import { config } from "../../config";
 import { nuqRedis } from "./redis";
@@ -419,18 +423,19 @@ class NuQ<JobData = any, JobReturnValue = any> {
           },
         });
 
-        this.sender = {
+        const sender = {
           type: "rabbitmq",
           connection,
           channel,
-        };
+        } as const;
+        this.sender = sender;
 
         channel.on("close", () => {
           logger.info("NuQ sender channel closed", { module: "nuq/rabbitmq" });
-          if (!this.shuttingDown) {
+          if (!this.shuttingDown && this.sender === sender) {
             connection.close().catch(() => {});
           }
-          this.sender = null;
+          this.sender = clearRabbitMqSenderIfCurrent(this.sender, sender);
         });
 
         channel.on("error", err => {
@@ -444,7 +449,7 @@ class NuQ<JobData = any, JobReturnValue = any> {
           logger.info("NuQ sender connection closed", {
             module: "nuq/rabbitmq",
           });
-          this.sender = null;
+          this.sender = clearRabbitMqSenderIfCurrent(this.sender, sender);
         });
 
         connection.on("error", err => {
@@ -465,19 +470,30 @@ class NuQ<JobData = any, JobReturnValue = any> {
     listenChannelId: string,
     _logger: Logger = logger,
   ) {
-    await this.startSender();
-
-    if (this.sender) {
-      this.sender.channel.sendToQueue(
-        this.queueName + ".listen." + listenChannelId,
-        Buffer.from(status, "utf8"),
-        {
-          correlationId: id,
-        },
-      );
+    const sent = await sendRabbitMqJobEndBestEffort({
+      queueName: this.queueName,
+      listenChannelId,
+      jobId: id,
+      status,
+      startSender: () => this.startSender(),
+      send: () => {
+        if (!this.sender) throw new Error("NuQ sender not started");
+        this.sender.channel.sendToQueue(
+          this.queueName + ".listen." + listenChannelId,
+          Buffer.from(status, "utf8"),
+          { correlationId: id },
+        );
+      },
+      resetSender: () => {
+        const sender = this.sender;
+        this.sender = null;
+        if (sender) sender.connection.close().catch(() => {});
+      },
+      warn: details =>
+        _logger.warn("NuQ job notification failed after retry", details),
+    });
+    if (sent) {
       _logger.info("NuQ job sent", { module: "nuq/rabbitmq" });
-    } else {
-      _logger.warn("NuQ sender not started", { module: "nuq/rabbitmq" });
     }
   }
 

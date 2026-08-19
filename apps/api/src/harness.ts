@@ -4,6 +4,7 @@ import { existsSync } from "fs";
 import * as net from "net";
 import { basename, join } from "path";
 import { HTML_TO_MARKDOWN_PATH } from "./natives";
+import { terminateChildProcess } from "./lib/bounded-process-termination";
 
 const childProcesses = new Set<ChildProcess>();
 const stopping = new WeakSet<ChildProcess>(); // processes we're intentionally stopping
@@ -327,70 +328,11 @@ function execForward(
 }
 
 function terminateProcess(proc: ChildProcess, force: boolean): Promise<void> {
-  return new Promise(resolve => {
-    if (!proc || proc.killed || proc.exitCode !== null) {
-      resolve();
-      return;
-    }
-
-    stopping.add(proc);
-
-    let killTimeout: NodeJS.Timeout | null = null;
-
-    let resolved = false;
-    const cleanup = () => {
-      if (!resolved) {
-        resolved = true;
-        resolve();
-      }
-
-      if (killTimeout) {
-        clearTimeout(killTimeout);
-        killTimeout = null;
-      }
-    };
-
-    proc.once("close", cleanup);
-    proc.once("error", cleanup);
-
-    const isWindows = process.platform === "win32";
-
-    if (isWindows && proc.pid) {
-      const killer = spawn(
-        "taskkill",
-        ["/pid", proc.pid.toString(), "/t", "/f"],
-        {
-          stdio: "ignore",
-        },
-      );
-      killer.on("exit", cleanup);
-    } else if (proc.pid) {
-      try {
-        process.kill(-proc.pid, "SIGTERM");
-      } catch (e) {
-        proc.kill("SIGTERM");
-      }
-
-      // for the old workers, if they are mid-job it will wait for them to finish
-      // for dev mode for now we can just kill them (jobs will be picked up again if required)
-      if (force && IS_DEV) {
-        killTimeout = setTimeout(() => {
-          if (proc.pid) {
-            logger.warn(
-              `Process ${proc.pid} did not exit in time, forcing termination`,
-            );
-
-            try {
-              process.kill(-proc.pid, "SIGKILL");
-            } catch {
-              try {
-                proc.kill("SIGKILL");
-              } catch {}
-            }
-          }
-        }, 5000);
-      }
-    }
+  if (proc) stopping.add(proc);
+  return terminateChildProcess(proc, {
+    timeoutMs: force && IS_DEV ? 5_000 : 30_000,
+    onForce: pid =>
+      logger.warn(`Process ${pid} did not exit in time, forcing termination`),
   });
 }
 
