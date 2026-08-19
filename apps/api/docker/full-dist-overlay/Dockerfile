@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-ARG BASE_IMAGE=docker.io/benjaminzhang/firecrawl@sha256:3a443eb6d9dee607e03111f146fc4d051fff528609179e407d8392f79d75ba87
+ARG BASE_IMAGE=ghcr.io/ben0112/firecrawl@sha256:f9be0152af8ca42e1b5106f6566eef86dc0d1513ffd6dcd0129677d3a7e1055b
 FROM ${BASE_IMAGE}
 
 ARG GIT_SHA=unknown
@@ -11,6 +11,7 @@ ARG GIT_SHA=unknown
 # Go toolchain through QEMU when publishing an amd64 hotfix from Apple Silicon.
 RUN rm -rf /app/dist && mkdir -p /app/dist
 COPY --from=dist-context . /app/dist
+RUN printf '%s\n' "$GIT_SHA" > /app/BUILD_SHA
 
 ENV FIRECRAWL_BUILD_SHA=$GIT_SHA
 LABEL org.opencontainers.image.revision=$GIT_SHA
