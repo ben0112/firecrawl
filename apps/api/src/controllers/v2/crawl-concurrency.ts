@@ -2,9 +2,13 @@ import { Response } from "express";
 import { getCrawl, saveCrawl } from "../../lib/crawl-redis";
 import { getEffectiveConcurrencyLimit } from "../../lib/concurrency-limit";
 import { reconcileConcurrencyQueue } from "../../lib/concurrency-queue-reconciler";
+import { ConcurrencyReconciliationScheduler } from "../../lib/concurrency-reconciliation-scheduler";
 import { logger as _logger } from "../../lib/logger";
 import { crawlGroup } from "../../services/worker/nuq-router";
 import { RequestWithAuth } from "./types";
+
+const concurrencyReconciliationScheduler =
+  new ConcurrencyReconciliationScheduler(reconcileConcurrencyQueue);
 
 /**
  * Adjusts a running crawl/batch concurrency gate. A value of zero pauses new
@@ -64,13 +68,13 @@ export async function crawlConcurrencyController(
   const previous = crawl.maxConcurrency;
   crawl.maxConcurrency = requested;
   await saveCrawl(req.params.jobId, crawl);
-  const reconciliation = await reconcileConcurrencyQueue({
-    teamId: req.auth.team_id,
-    logger: _logger.child({
+  concurrencyReconciliationScheduler.schedule(
+    req.auth.team_id,
+    _logger.child({
       module: "api/v2/crawl-concurrency",
       crawlId: req.params.jobId,
     }),
-  });
+  );
 
   return res.status(200).json({
     success: true,
@@ -78,6 +82,6 @@ export async function crawlConcurrencyController(
     previousMaxConcurrency: previous ?? null,
     maxConcurrency: requested,
     deploymentMaxConcurrency: maximum,
-    reconciliation,
+    reconciliation: { status: "scheduled" },
   });
 }

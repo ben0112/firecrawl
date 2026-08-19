@@ -1,3 +1,13 @@
+vi.mock("../../../../services/rate-limiter", () => ({
+  redisRateLimitClient: {},
+}));
+vi.mock("../../../../services/redlock", () => ({
+  redlock: {},
+}));
+vi.mock("../../store", () => ({
+  getOrgZscalerCredentials: vi.fn(),
+}));
+
 import type { ZscalerUrlCategory } from "./client";
 import { materializeCategories, matchSyncedRules } from "./sync";
 
