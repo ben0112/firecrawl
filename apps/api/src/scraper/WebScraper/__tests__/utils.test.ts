@@ -1,6 +1,6 @@
 import { WebCrawler } from "../crawler";
 
-describe("WebCrawler - noSections", () => {
+describe("WebCrawler - section link filtering", () => {
   let crawler: WebCrawler;
 
   beforeEach(() => {
@@ -13,43 +13,36 @@ describe("WebCrawler - noSections", () => {
     });
   });
 
-  describe("noSections method", () => {
-    it("should return true for URLs without hash fragments", () => {
-      expect(crawler["noSections"]("https://example.com/page")).toBe(true);
-      expect(crawler["noSections"]("https://example.com/blog/post")).toBe(true);
-      expect(crawler["noSections"]("https://example.com")).toBe(true);
-    });
+  async function expectAllowed(url: string, allowed: boolean) {
+    const result = await crawler.filterURL(url, "https://example.com/page");
+    expect(result.allowed).toBe(allowed);
+  }
 
-    it("should return false for simple anchor links", () => {
-      expect(crawler["noSections"]("https://example.com/page#section")).toBe(
-        false,
-      );
-      expect(crawler["noSections"]("https://example.com/page#top")).toBe(false);
-      expect(crawler["noSections"]("https://example.com/page#")).toBe(false);
-      expect(crawler["noSections"]("https://example.com/page#a")).toBe(false);
-    });
+  it("allows URLs without hash fragments", async () => {
+    await expectAllowed("https://example.com/page", true);
+    await expectAllowed("https://example.com/blog/post", true);
+    await expectAllowed("https://example.com", true);
+  });
 
-    it("should return true for hash fragments that look like routes", () => {
-      expect(crawler["noSections"]("https://example.com/app#/dashboard")).toBe(
-        true,
-      );
-      expect(
-        crawler["noSections"]("https://example.com/spa#/user/profile"),
-      ).toBe(true);
-      expect(
-        crawler["noSections"]("https://example.com/page#/settings/account"),
-      ).toBe(true);
-    });
+  it("rejects simple anchor links", async () => {
+    await expectAllowed("https://example.com/page#section", false);
+    await expectAllowed("https://example.com/page#top", false);
+    await expectAllowed("https://example.com/page#", false);
+    await expectAllowed("https://example.com/page#a", false);
+  });
 
-    it("should return false for short hash fragments even with slashes", () => {
-      expect(crawler["noSections"]("https://example.com/page#/")).toBe(false);
-    });
+  it("allows hash fragments that look like routes", async () => {
+    await expectAllowed("https://example.com/app#/dashboard", true);
+    await expectAllowed("https://example.com/spa#/user/profile", true);
+    await expectAllowed("https://example.com/page#/settings/account", true);
+  });
 
-    it("should handle edge cases", () => {
-      expect(crawler["noSections"]("https://example.com/page#ab")).toBe(false);
-      expect(crawler["noSections"]("https://example.com/page#abc/def")).toBe(
-        true,
-      );
-    });
+  it("rejects short hash fragments even with slashes", async () => {
+    await expectAllowed("https://example.com/page#/", false);
+  });
+
+  it("handles edge cases", async () => {
+    await expectAllowed("https://example.com/page#ab", false);
+    await expectAllowed("https://example.com/page#abc/def", true);
   });
 });

@@ -142,6 +142,17 @@ describe("Search Query Builder", () => {
       expect(result.categoryMap.size).toBe(0);
     });
 
+    it("lets exclusions override conflicting include domains", () => {
+      const result = buildSearchQuery("web scraping", undefined, {
+        includeDomains: ["reuters.com", "Spam.Example"],
+        excludeDomains: ["spam.example"],
+      });
+
+      expect(result.query).toBe(
+        "web scraping site:reuters.com -site:spam.example",
+      );
+    });
+
     it("should ignore empty domain filter arrays", () => {
       const result = buildSearchQuery("web scraping", undefined, {
         includeDomains: [],

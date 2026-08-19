@@ -38,11 +38,18 @@ const cosineSimilarity = (vec1: number[], vec2: number[]): number => {
 
 // Function to convert text to vector
 const textToVector = (searchQuery: string, text: string): number[] => {
-  const words = searchQuery.toLowerCase().split(/\W+/);
-  return words.map(word => {
-    const count = (text.toLowerCase().match(new RegExp(word, "g")) || [])
-      .length;
-    return count / text.length;
+  const terms = [
+    ...new Set(searchQuery.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []),
+  ];
+  const normalizedText = text.toLowerCase();
+  return terms.map(term => {
+    let count = 0;
+    let offset = 0;
+    while ((offset = normalizedText.indexOf(term, offset)) !== -1) {
+      count += 1;
+      offset += term.length;
+    }
+    return count / Math.max(1, normalizedText.length);
   });
 };
 
@@ -95,7 +102,23 @@ async function performRanking(
     return linksAndScores;
   } catch (error) {
     console.error(`Error performing semantic search: ${error}`);
-    return [];
+    const queryVector = textToVector(searchQuery, searchQuery);
+    const linksAndScores = linksWithContext.map(
+      (linkWithContext, originalIndex) => ({
+        link: links[originalIndex],
+        linkWithContext,
+        score: cosineSimilarity(
+          queryVector,
+          textToVector(searchQuery, linkWithContext),
+        ),
+        originalIndex,
+      }),
+    );
+    linksAndScores.sort((a, b) => {
+      const scoreDiff = b.score - a.score;
+      return scoreDiff === 0 ? a.originalIndex - b.originalIndex : scoreDiff;
+    });
+    return linksAndScores;
   }
 }
 

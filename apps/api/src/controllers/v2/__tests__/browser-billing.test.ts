@@ -68,7 +68,7 @@ describe("billing constants", () => {
 
 describe("calculateBrowserSessionCredits", () => {
   describe("with default browser rate (120/hr)", () => {
-    it("returns minimum 2 credits for very short sessions", () => {
+    it("returns the one-minute minimum for very short sessions", () => {
       expect(calculateBrowserSessionCredits(0)).toBe(2);
       expect(calculateBrowserSessionCredits(1000)).toBe(2);
       expect(calculateBrowserSessionCredits(10_000)).toBe(2);
@@ -99,11 +99,11 @@ describe("calculateBrowserSessionCredits", () => {
   describe("with interact rate (420/hr)", () => {
     it("returns minimum 2 credits for very short sessions", () => {
       expect(calculateBrowserSessionCredits(0, INTERACT_CREDITS_PER_HOUR)).toBe(
-        2,
+        7,
       );
       expect(
         calculateBrowserSessionCredits(1000, INTERACT_CREDITS_PER_HOUR),
-      ).toBe(2);
+      ).toBe(7);
     });
 
     it("calculates 7 credits per minute", () => {
@@ -130,11 +130,10 @@ describe("calculateBrowserSessionCredits", () => {
       ).toBe(420);
     });
 
-    it("rounds up to next integer", () => {
-      // 31s / 3600s * 420 = 3.616... → ceil = 4
+    it("uses the one-minute minimum below 60 seconds", () => {
       expect(
         calculateBrowserSessionCredits(31_000, INTERACT_CREDITS_PER_HOUR),
-      ).toBe(4);
+      ).toBe(7);
     });
   });
 

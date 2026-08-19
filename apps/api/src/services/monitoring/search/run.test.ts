@@ -528,7 +528,8 @@ describe("domain scoping", () => {
       } as Partial<typeof baseTarget>,
     });
     const sentQuery = searchMock.mock.calls[0][0].query as string;
-    expect(sentQuery).toContain("(site:reuters.com OR site:spam.example)");
+    expect(sentQuery).toContain("site:reuters.com");
+    expect(sentQuery).not.toMatch(/(^|\s)site:spam\.example(?=\s|$)/);
     expect(sentQuery).toContain("-site:spam.example");
   });
 

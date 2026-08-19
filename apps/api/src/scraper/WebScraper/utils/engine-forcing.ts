@@ -48,7 +48,7 @@ function domainMatchesPattern(domain: string, pattern: string): boolean {
 
   if (pattern.startsWith("*.")) {
     const basePattern = pattern.substring(2); // Remove "*."
-    return domain === basePattern || domain.endsWith(`.${basePattern}`);
+    return domain.endsWith(`.${basePattern}`);
   }
 
   return domain === pattern || domain.endsWith(`.${pattern}`);
@@ -78,7 +78,7 @@ export function getEngineForUrl(url: string): Engine | Engine[] | undefined {
     return undefined;
   }
 
-  const domain = parsedUrl.domain;
+  const domain = parsedUrl.hostname;
   if (!domain) {
     return undefined;
   }

@@ -1,6 +1,19 @@
+const { embedMock } = vi.hoisted(() => ({
+  embedMock: vi.fn(),
+}));
+
+vi.mock("ai", () => ({
+  embed: embedMock,
+}));
+
 import { performRanking } from "./ranker";
 
 describe("performRanking", () => {
+  beforeEach(() => {
+    embedMock.mockReset();
+    embedMock.mockRejectedValue(new Error("embedding provider unavailable"));
+  });
+
   it("should rank links based on similarity to search query", async () => {
     const linksWithContext = [
       "url: https://example.com/dogs, title: All about dogs, description: Learn about different dog breeds",
@@ -24,7 +37,7 @@ describe("performRanking", () => {
     expect(result).toBeInstanceOf(Array);
     expect(result.length).toBe(3);
 
-    // First result should be the dogs page since query is about dogs
+    // The local fallback should still rank the matching cats page first.
     expect(result[0].link).toBe("https://example.com/cats");
 
     // Each result should have required properties
@@ -65,5 +78,17 @@ describe("performRanking", () => {
 
     // If scores are equal, original order should be maintained
     expect(result[0].originalIndex).toBeLessThan(result[1].originalIndex);
+  });
+
+  it("keeps fallback scores finite when link context is empty", async () => {
+    const result = await performRanking(
+      ["", "url: https://example.com/cats, title: Cats"],
+      ["https://example.com/empty", "https://example.com/cats"],
+      "cats",
+      { teamId: "test-team" },
+    );
+
+    expect(result[0].link).toBe("https://example.com/cats");
+    expect(result.every(item => Number.isFinite(item.score))).toBe(true);
   });
 });

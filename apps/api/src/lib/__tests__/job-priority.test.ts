@@ -5,10 +5,10 @@ import {
   deleteJobPriority,
 } from "../job-priority";
 import { redisEvictConnection } from "../../services/redis";
-import {} from "../../types";
+import { autumnService } from "../../services/autumn/autumn.service";
 
-vi.mock("../../services/queue-service", () => ({
-  redisConnection: {
+vi.mock("../../services/redis", () => ({
+  redisEvictConnection: {
     sadd: vi.fn(),
     srem: vi.fn(),
     scard: vi.fn(),
@@ -16,9 +16,16 @@ vi.mock("../../services/queue-service", () => ({
   },
 }));
 
+vi.mock("../../services/autumn/autumn.service", () => ({
+  autumnService: {
+    getRateLimitMultiplier: vi.fn(),
+  },
+}));
+
 describe("Job Priority Tests", () => {
-  afterEach(() => {
+  beforeEach(() => {
     vi.clearAllMocks();
+    (autumnService.getRateLimitMultiplier as Mock).mockResolvedValue(50);
   });
 
   test("addJobPriority should add job_id to the set and set expiration", async () => {
@@ -47,8 +54,8 @@ describe("Job Priority Tests", () => {
 
   test("getJobPriority should return correct priority based on plan and set length", async () => {
     const team_id = "team1";
-    const plan = "standard";
     (redisEvictConnection.scard as Mock).mockResolvedValue(150);
+    (autumnService.getRateLimitMultiplier as Mock).mockResolvedValue(50);
 
     const priority = await getJobPriority({ team_id });
     expect(priority).toBe(10);
@@ -62,22 +69,20 @@ describe("Job Priority Tests", () => {
     const team_id = "team1";
 
     (redisEvictConnection.scard as Mock).mockResolvedValue(50);
-    let plan = "hobby";
+    (autumnService.getRateLimitMultiplier as Mock).mockResolvedValue(10);
     let priority = await getJobPriority({ team_id });
     expect(priority).toBe(10);
 
     (redisEvictConnection.scard as Mock).mockResolvedValue(150);
-    plan = "hobby";
     priority = await getJobPriority({ team_id });
     expect(priority).toBe(25); // basePriority + Math.ceil((150 - 50) * 0.3)
 
     (redisEvictConnection.scard as Mock).mockResolvedValue(25);
-    plan = "free";
+    (autumnService.getRateLimitMultiplier as Mock).mockResolvedValue(1);
     priority = await getJobPriority({ team_id });
     expect(priority).toBe(10);
 
     (redisEvictConnection.scard as Mock).mockResolvedValue(60);
-    plan = "free";
     priority = await getJobPriority({ team_id });
     expect(priority).toBe(28); // basePriority + Math.ceil((60 - 25) * 0.5)
   });

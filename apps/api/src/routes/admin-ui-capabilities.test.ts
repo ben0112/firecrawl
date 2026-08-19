@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import express, {
   type NextFunction,
@@ -66,6 +66,17 @@ afterEach(() => {
 });
 
 describe("admin UI capabilities route", () => {
+  const repositoryRoot =
+    process.env.FIRECRAWL_REPOSITORY_ROOT ?? resolve(__dirname, "../../../..");
+  const hasRepositoryContract = ["docker-compose.yaml", "SELF_HOST.md"].every(
+    file => existsSync(resolve(repositoryRoot, file)),
+  );
+  if (process.env.FIRECRAWL_REPOSITORY_ROOT && !hasRepositoryContract) {
+    throw new Error(
+      `FIRECRAWL_REPOSITORY_ROOT does not contain the repository contract: ${repositoryRoot}`,
+    );
+  }
+
   it("rejects unauthenticated requests and serves the exact authenticated contract", async () => {
     const app = await registeredApp();
 
@@ -91,31 +102,31 @@ describe("admin UI capabilities route", () => {
     );
   });
 
-  it("requires the source revision in Compose and documents the exact command", () => {
-    const repositoryRoot =
-      process.env.FIRECRAWL_REPOSITORY_ROOT ??
-      resolve(__dirname, "../../../..");
-    const composeSource = readFileSync(
-      resolve(repositoryRoot, "docker-compose.yaml"),
-      "utf8",
-    );
-    const selfHostSource = readFileSync(
-      resolve(repositoryRoot, "SELF_HOST.md"),
-      "utf8",
-    );
+  it.runIf(hasRepositoryContract)(
+    "requires the source revision in Compose and documents the exact command",
+    () => {
+      const composeSource = readFileSync(
+        resolve(repositoryRoot, "docker-compose.yaml"),
+        "utf8",
+      );
+      const selfHostSource = readFileSync(
+        resolve(repositoryRoot, "SELF_HOST.md"),
+        "utf8",
+      );
 
-    expect(composeSource).toMatch(
-      /build:\s*\n\s+context: apps\/api\s*\n\s+args:\s*\n\s+GIT_SHA: \$\{GIT_SHA:\?[^}]+\}/,
-    );
-    expect(selfHostSource).toContain(
-      'export GIT_SHA="$(git rev-parse HEAD)"\ndocker compose up --build',
-    );
-    expect(selfHostSource).toMatch(/re-export the\s+same `GIT_SHA`/);
-    for (const command of ["ps", "logs", "down"]) {
-      expect(selfHostSource).toContain(`docker compose ${command}`);
-    }
-    expect(selfHostSource).toContain("`GIT_SHA=<full SHA>`");
-    expect(selfHostSource).toContain("ignored root `.env`");
-    expect(selfHostSource).toContain("until the next rebuild");
-  });
+      expect(composeSource).toMatch(
+        /build:\s*\n\s+context: apps\/api\s*\n\s+args:\s*\n\s+GIT_SHA: \$\{GIT_SHA:\?[^}]+\}/,
+      );
+      expect(selfHostSource).toContain(
+        'export GIT_SHA="$(git rev-parse HEAD)"\ndocker compose up --build',
+      );
+      expect(selfHostSource).toMatch(/re-export the\s+same `GIT_SHA`/);
+      for (const command of ["ps", "logs", "down"]) {
+        expect(selfHostSource).toContain(`docker compose ${command}`);
+      }
+      expect(selfHostSource).toContain("`GIT_SHA=<full SHA>`");
+      expect(selfHostSource).toContain("ignored root `.env`");
+      expect(selfHostSource).toContain("until the next rebuild");
+    },
+  );
 });

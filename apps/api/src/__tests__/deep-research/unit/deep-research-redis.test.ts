@@ -8,11 +8,10 @@ import {
   StoredDeepResearch,
 } from "../../../lib/deep-research/deep-research-redis";
 
-vi.mock("../../../services/queue-service", () => ({
-  redisConnection: {
+vi.mock("../../../services/redis", () => ({
+  redisEvictConnection: {
     set: vi.fn(),
     get: vi.fn(),
-    expire: vi.fn(),
     pttl: vi.fn(),
   },
 }));
@@ -44,9 +43,7 @@ describe("Deep Research Redis Operations", () => {
       expect(redisEvictConnection.set).toHaveBeenCalledWith(
         "deep-research:test-id",
         JSON.stringify(mockResearch),
-      );
-      expect(redisEvictConnection.expire).toHaveBeenCalledWith(
-        "deep-research:test-id",
+        "EX",
         6 * 60 * 60,
       );
     });
@@ -104,9 +101,7 @@ describe("Deep Research Redis Operations", () => {
       expect(redisEvictConnection.set).toHaveBeenCalledWith(
         "deep-research:test-id",
         JSON.stringify(expectedUpdate),
-      );
-      expect(redisEvictConnection.expire).toHaveBeenCalledWith(
-        "deep-research:test-id",
+        "EX",
         6 * 60 * 60,
       );
     });
@@ -117,22 +112,21 @@ describe("Deep Research Redis Operations", () => {
       await updateDeepResearch("test-id", { status: "completed" });
 
       expect(redisEvictConnection.set).not.toHaveBeenCalled();
-      expect(redisEvictConnection.expire).not.toHaveBeenCalled();
     });
   });
 
   describe("getDeepResearchExpiry", () => {
     it("should return correct expiry date", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-08-19T05:15:26.474Z"));
       const mockTTL = 3600000; // 1 hour in milliseconds
       (redisEvictConnection.pttl as Mock).mockResolvedValue(mockTTL);
 
       const result = await getDeepResearchExpiry("test-id");
 
       expect(result).toBeInstanceOf(Date);
-      expect(result.getTime()).toBeCloseTo(
-        new Date().getTime() + mockTTL,
-        -2, // Allow 100ms precision
-      );
+      expect(result.toISOString()).toBe("2026-08-19T06:15:26.000Z");
+      vi.useRealTimers();
     });
   });
 });

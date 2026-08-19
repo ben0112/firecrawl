@@ -9,8 +9,6 @@ import {
 import { RateLimiterMode } from "../types";
 import { authenticateUser } from "../controllers/auth";
 import { applyAgentAuthDiscoveryHeader } from "../lib/agent-auth-discovery";
-import { createIdempotencyKey } from "../services/idempotency/create";
-import { validateIdempotencyKey } from "../services/idempotency/validate";
 import { isUrlBlocked } from "../scraper/WebScraper/utils/blocklist";
 import { logger } from "../lib/logger";
 import {
@@ -33,6 +31,8 @@ import { getThirdPartyDataTermsRequiredResponse } from "../lib/exchange";
 import { getExchangeAccessForRequestBody } from "../lib/exchange-request";
 import { getScrapeZDR } from "../lib/zdr-helpers";
 import { isAgentInteropSecretValid } from "../lib/agent-interop";
+
+export { idempotencyMiddleware } from "./idempotency-middleware";
 
 export function checkCreditsMiddleware(
   _minimum?: number,
@@ -269,26 +269,6 @@ export function authMiddleware(
   };
 }
 
-export function idempotencyMiddleware(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
-  (async () => {
-    if (req.headers["x-idempotency-key"]) {
-      const isIdempotencyValid = await validateIdempotencyKey(req);
-      if (!isIdempotencyValid) {
-        if (!res.headersSent) {
-          return res
-            .status(409)
-            .json({ success: false, error: "Idempotency key already used" });
-        }
-      }
-      createIdempotencyKey(req);
-    }
-    next();
-  })().catch(err => next(err));
-}
 export function blocklistMiddleware(
   req: RequestWithMaybeACUC<any, any, any>,
   res: Response,

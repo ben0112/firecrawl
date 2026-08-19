@@ -92,7 +92,7 @@ describe("Engine Forcing", () => {
       expect(getEngineForUrl("")).toBeUndefined();
     });
 
-    it("should throw error if not initialized", async () => {
+    it("should return undefined if not initialized", async () => {
       delete config.FORCED_ENGINE_DOMAINS;
       // Re-import a fresh, uninitialized module instance (mirrors the original
       // require() which, under ts-jest, returned a separate module evaluation).
@@ -100,9 +100,7 @@ describe("Engine Forcing", () => {
       const { getEngineForUrl: freshGetEngineForUrl } = await import(
         "../engine-forcing.js"
       );
-      expect(() => {
-        freshGetEngineForUrl("https://example.com");
-      }).toThrow("Engine forcing not initialized");
+      expect(freshGetEngineForUrl("https://example.com")).toBeUndefined();
     });
   });
 });

@@ -104,7 +104,7 @@ export async function crawlController(req: Request, res: Response) {
         return res.status(409).json({ error: "Idempotency key already used" });
       }
       try {
-        createIdempotencyKey(req);
+        await createIdempotencyKey(req);
       } catch (error) {
         logger.error(error);
         return res.status(500).json({ error: error.message });
