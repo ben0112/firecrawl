@@ -80,6 +80,8 @@ describe("crawlController", () => {
     await crawlController(req, res);
 
     expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({ error: "database unavailable" });
+    expect(res.json).toHaveBeenCalledWith({
+      error: "Failed to store idempotency key",
+    });
   });
 });

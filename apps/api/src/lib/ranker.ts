@@ -53,6 +53,30 @@ const textToVector = (searchQuery: string, text: string): number[] => {
   });
 };
 
+function performLexicalRanking(
+  linksWithContext: string[],
+  links: string[],
+  searchQuery: string,
+) {
+  const queryVector = textToVector(searchQuery, searchQuery);
+  const linksAndScores = linksWithContext.map(
+    (linkWithContext, originalIndex) => ({
+      link: links[originalIndex],
+      linkWithContext,
+      score: cosineSimilarity(
+        queryVector,
+        textToVector(searchQuery, linkWithContext),
+      ),
+      originalIndex,
+    }),
+  );
+  linksAndScores.sort((a, b) => {
+    const scoreDiff = b.score - a.score;
+    return scoreDiff === 0 ? a.originalIndex - b.originalIndex : scoreDiff;
+  });
+  return linksAndScores;
+}
+
 async function performRanking(
   linksWithContext: string[],
   links: string[],
@@ -72,10 +96,12 @@ async function performRanking(
     const queryEmbedding = await getEmbedding(sanitizedQuery, metadata);
 
     // Generate embeddings for each link and calculate similarity in parallel
+    let successfulLinkEmbeddings = 0;
     const linksAndScores = await Promise.all(
       linksWithContext.map((linkWithContext, index) =>
         getEmbedding(linkWithContext, metadata)
           .then(linkEmbedding => {
+            successfulLinkEmbeddings += 1;
             const score = cosineSimilarity(queryEmbedding, linkEmbedding);
             return {
               link: links[index],
@@ -93,6 +119,10 @@ async function performRanking(
       ),
     );
 
+    if (successfulLinkEmbeddings === 0) {
+      return performLexicalRanking(linksWithContext, links, searchQuery);
+    }
+
     // Sort links based on similarity scores while preserving original order for equal scores
     linksAndScores.sort((a, b) => {
       const scoreDiff = b.score - a.score;
@@ -102,23 +132,7 @@ async function performRanking(
     return linksAndScores;
   } catch (error) {
     console.error(`Error performing semantic search: ${error}`);
-    const queryVector = textToVector(searchQuery, searchQuery);
-    const linksAndScores = linksWithContext.map(
-      (linkWithContext, originalIndex) => ({
-        link: links[originalIndex],
-        linkWithContext,
-        score: cosineSimilarity(
-          queryVector,
-          textToVector(searchQuery, linkWithContext),
-        ),
-        originalIndex,
-      }),
-    );
-    linksAndScores.sort((a, b) => {
-      const scoreDiff = b.score - a.score;
-      return scoreDiff === 0 ? a.originalIndex - b.originalIndex : scoreDiff;
-    });
-    return linksAndScores;
+    return performLexicalRanking(linksWithContext, links, searchQuery);
   }
 }
 

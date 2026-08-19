@@ -91,4 +91,20 @@ describe("performRanking", () => {
     expect(result[0].link).toBe("https://example.com/cats");
     expect(result.every(item => Number.isFinite(item.score))).toBe(true);
   });
+
+  it("uses the lexical fallback when every link embedding fails", async () => {
+    embedMock
+      .mockReset()
+      .mockResolvedValueOnce({ embedding: [1, 0] })
+      .mockRejectedValue(new Error("link embedding unavailable"));
+
+    const result = await performRanking(
+      ["title: Dogs", "title: Cats"],
+      ["https://example.com/dogs", "https://example.com/cats"],
+      "cats",
+      { teamId: "test-team" },
+    );
+
+    expect(result[0].link).toBe("https://example.com/cats");
+  });
 });

@@ -106,8 +106,10 @@ export async function crawlController(req: Request, res: Response) {
       try {
         await createIdempotencyKey(req);
       } catch (error) {
-        logger.error(error);
-        return res.status(500).json({ error: error.message });
+        logger.error("Failed to store v0 crawl idempotency key", { error });
+        return res
+          .status(500)
+          .json({ error: "Failed to store idempotency key" });
       }
     }
 

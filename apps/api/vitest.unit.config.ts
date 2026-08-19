@@ -10,7 +10,9 @@ export default mergeConfig(
       // `test:integration` / `test:snips` in their provisioned environments.
       exclude: [
         "**/__tests__/e2e*/**",
-        "**/__tests__/snips/**",
+        "**/__tests__/snips/v0/**",
+        "**/__tests__/snips/v1/**",
+        "**/__tests__/snips/v2/**",
         "src/scraper/scrapeURL/scrapeURL.test.ts",
       ],
     },
